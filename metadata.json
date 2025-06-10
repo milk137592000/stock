@@ -1,0 +1,5 @@
+{
+  "name": "智慧投資顧問 (Smart Investment Advisor)",
+  "description": "由專業AI金融分析師，根據您的投資策略和市場趨勢，每月提供個性化ETF與股票投資建議，包括建議買賣的標的、股數與金額。",
+  "requestFramePermissions": []
+}
