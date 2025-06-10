@@ -11,9 +11,9 @@ interface AIModelConfig {
 
 const MODEL_CONFIGS: Record<AIModel, AIModelConfig> = {
     deepseek: {
-        model: "deepseek/deepseek-r1-0528:free",
+        model: "deepseek/deepseek-r1-0528-qwen3-8b:free",
         baseUrl: "https://openrouter.ai/api/v1",
-        apiKey: "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"
+        apiKey: "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"
     },
     mistral: {
         model: "mistralai/devstral-small:free",
