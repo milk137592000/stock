@@ -7,6 +7,7 @@ interface AIModelConfig {
     model: string;
     baseUrl: string;
     apiKey: string;
+    isGemini?: boolean;
 }
 
 const MODEL_CONFIGS: Record<AIModel, AIModelConfig> = {
@@ -21,9 +22,10 @@ const MODEL_CONFIGS: Record<AIModel, AIModelConfig> = {
         apiKey: "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"
     },
     gemini: {
-        model: "google/gemma-3-27b-it:free",
-        baseUrl: "https://openrouter.ai/api/v1",
-        apiKey: "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"
+        model: "gemini-2.0-flash",
+        baseUrl: "https://generativelanguage.googleapis.com/v1beta/models",
+        apiKey: "AIzaSyAnMkrPPgmUSjmyD-2xZ6HRWEmIjQVd4vo",
+        isGemini: true
     }
 };
 
@@ -125,32 +127,58 @@ export const getInvestmentAdvice = async (
     const prompt = constructPrompt(userMaxMonthlyInvestment, userPortfolioSymbols, userHoldings);
 
     try {
-        const response = await fetch(`${config.baseUrl}/chat/completions`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${config.apiKey}`,
-                'HTTP-Referer': 'http://localhost:5173',
-                'X-Title': 'Smart Investment Advisor'
-            },
-            body: JSON.stringify({
-                model: config.model,
-                messages: [
-                    {
-                        role: "user",
-                        content: prompt
-                    }
-                ],
-                response_format: { type: "json_object" }
-            })
-        });
+        let response;
+        if (config.isGemini) {
+            response = await fetch(`${config.baseUrl}/${config.model}:generateContent?key=${config.apiKey}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    contents: [
+                        {
+                            parts: [
+                                {
+                                    text: prompt
+                                }
+                            ]
+                        }
+                    ]
+                })
+            });
+        } else {
+            response = await fetch(`${config.baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${config.apiKey}`,
+                    'HTTP-Referer': 'http://localhost:5173',
+                    'X-Title': 'Smart Investment Advisor'
+                },
+                body: JSON.stringify({
+                    model: config.model,
+                    messages: [
+                        {
+                            role: "user",
+                            content: prompt
+                        }
+                    ],
+                    response_format: { type: "json_object" }
+                })
+            });
+        }
 
         if (!response.ok) {
             throw new Error(`API request failed with status ${response.status}`);
         }
 
         const data = await response.json();
-        const responseText = data.choices[0].message.content;
+        let responseText;
+        if (config.isGemini) {
+            responseText = data.candidates[0].content.parts[0].text;
+        } else {
+            responseText = data.choices[0].message.content;
+        }
         const geminiResponse = JSON.parse(responseText) as GeminiApiResponse;
 
         // Validate that AI decided optimal investment is within user's range
