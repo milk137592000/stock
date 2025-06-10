@@ -2,6 +2,7 @@ export type StockSymbol =
   | '006208' | '00646' | '00919' | '00878' | '0056' // Existing
   | '00933B' // Added new holding
   | '0050' | '2330' | '00929' | '00679B' | '2603' | '00940' | '00713' // New suggestions pool
+  | '00733' | '00858' | '00900' | '00910' | '00916' | '00921' | '00942B' | '00947' // Newly added
   | 'AAPL' | 'GOOGL' | 'MSFT' | 'AMZN'; // Sample US stocks
 
 export interface StockDetails {
