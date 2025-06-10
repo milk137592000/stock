@@ -18,7 +18,7 @@ const MODEL_CONFIGS: Record<AIModel, AIModelConfig> = {
     mistral: {
         model: "mistralai/devstral-small:free",
         baseUrl: "https://openrouter.ai/api/v1",
-        apiKey: "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"
+        apiKey: "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"
     },
     gemini: {
         model: "google/gemma-3-27b-it:free",
