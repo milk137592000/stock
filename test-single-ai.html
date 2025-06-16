@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>單一AI模型測試</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+        .container {
+            background-color: #2a2a2a;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #666;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background-color: #4CAF50; }
+        .error { background-color: #f44336; }
+        .warning { background-color: #ff9800; }
+        .info { background-color: #2196F3; }
+        pre {
+            background-color: #1a1a1a;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>🤖 單一AI模型測試工具</h1>
+    
+    <div class="container">
+        <h2>📋 可用的AI模型</h2>
+        <div id="models-list">載入中...</div>
+    </div>
+
+    <div class="container">
+        <h2>🧪 測試控制</h2>
+        <button onclick="testAllModelsSequentially()">依序測試所有模型</button>
+        <button onclick="clearResults()">清除結果</button>
+    </div>
+
+    <div class="container">
+        <h2>📊 測試結果</h2>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        let availableModels = [];
+        let isTestingInProgress = false;
+
+        // 載入AI模型配置
+        async function loadAIModels() {
+            try {
+                const response = await fetch('/api.md');
+                const content = await response.text();
+                const models = [];
+                
+                const sections = content.split('###').filter(section => section.trim());
+                
+                for (const section of sections) {
+                    const lines = section.split('\n').filter(line => line.trim());
+                    if (lines.length === 0) continue;
+                    
+                    const name = lines[0].trim();
+                    let model = '', baseUrl = '', apiKey = '';
+                    
+                    for (const line of lines.slice(1)) {
+                        const trimmedLine = line.trim();
+                        if (trimmedLine.startsWith('model=')) {
+                            model = trimmedLine.replace('model=', '').replace(/"/g, '');
+                        } else if (trimmedLine.startsWith('base_url=')) {
+                            baseUrl = trimmedLine.replace('base_url=', '').replace(/"/g, '');
+                        } else if (trimmedLine.startsWith('api_key')) {
+                            apiKey = trimmedLine.replace(/api_key\s*=\s*/, '').replace(/"/g, '');
+                        }
+                    }
+                    
+                    if (name && model && baseUrl && apiKey) {
+                        models.push({ name, model, baseUrl, apiKey });
+                    }
+                }
+                
+                availableModels = models;
+                displayModels();
+                
+            } catch (error) {
+                document.getElementById('models-list').innerHTML = 
+                    `<div class="status error">載入AI模型配置失敗: ${error.message}</div>`;
+            }
+        }
+
+        // 顯示模型列表
+        function displayModels() {
+            const container = document.getElementById('models-list');
+            if (availableModels.length === 0) {
+                container.innerHTML = '<div class="status warning">沒有找到可用的AI模型</div>';
+                return;
+            }
+
+            let html = '';
+            availableModels.forEach(model => {
+                html += `
+                    <div style="margin: 10px 0; padding: 10px; background-color: #3a3a3a; border-radius: 5px;">
+                        <strong>${model.name}</strong> - ${model.model}
+                        <br>
+                        <button onclick="testSingleModel('${model.name}')" id="btn-${model.name}">
+                            測試 ${model.name}
+                        </button>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        // 測試單一模型
+        async function testSingleModel(modelName) {
+            if (isTestingInProgress) {
+                addResult('warning', '已有測試在進行中，請等待完成');
+                return;
+            }
+
+            const button = document.getElementById(`btn-${modelName}`);
+            button.disabled = true;
+            button.textContent = `測試中... ${modelName}`;
+            
+            addResult('info', `🧪 開始測試 ${modelName}...`);
+
+            try {
+                isTestingInProgress = true;
+                
+                // 這裡需要調用實際的AI服務
+                // 由於我們在HTML環境中，需要模擬或通過其他方式調用
+                addResult('warning', `${modelName} 測試功能需要在主應用程式中執行`);
+                addResult('info', `請在主應用程式的「AI建議自動排程」區塊中點擊「測試 ${modelName}」按鈕`);
+                
+            } catch (error) {
+                addResult('error', `${modelName} 測試失敗: ${error.message}`);
+            } finally {
+                button.disabled = false;
+                button.textContent = `測試 ${modelName}`;
+                isTestingInProgress = false;
+            }
+        }
+
+        // 依序測試所有模型
+        async function testAllModelsSequentially() {
+            if (isTestingInProgress) {
+                addResult('warning', '已有測試在進行中，請等待完成');
+                return;
+            }
+
+            addResult('info', '🚀 開始依序測試所有AI模型...');
+            addResult('warning', '⚠️ 由於速率限制，每個模型之間會等待10秒');
+            
+            for (let i = 0; i < availableModels.length; i++) {
+                const model = availableModels[i];
+                addResult('info', `📋 第 ${i + 1}/${availableModels.length} 個模型: ${model.name}`);
+                
+                await testSingleModel(model.name);
+                
+                // 在模型之間等待
+                if (i < availableModels.length - 1) {
+                    addResult('info', '⏳ 等待10秒後測試下一個模型...');
+                    await new Promise(resolve => setTimeout(resolve, 10000));
+                }
+            }
+            
+            addResult('success', '✅ 所有模型測試完成');
+        }
+
+        // 添加結果
+        function addResult(type, message) {
+            const results = document.getElementById('results');
+            const timestamp = new Date().toLocaleTimeString('zh-TW');
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = `[${timestamp}] ${message}`;
+            results.appendChild(div);
+            results.scrollTop = results.scrollHeight;
+        }
+
+        // 清除結果
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // 頁面載入時執行
+        window.onload = function() {
+            loadAIModels();
+            addResult('info', '🎯 單一AI模型測試工具已載入');
+            addResult('warning', '⚠️ 實際測試需要在主應用程式中執行');
+        };
+    </script>
+</body>
+</html>

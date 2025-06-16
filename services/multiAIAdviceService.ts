@@ -93,12 +93,26 @@ export class MultiAIAdviceService {
 
       const aiService = createAIService(model);
 
-      // 讓AI根據市場趨勢決定投資金額 (1000-20000 NTD)
+      // 使用穩健型長期投資策略提示
+      const investmentPrompt = `
+請以穩健型、長期持有投資策略為基準，目標年化報酬率5%以上。
+重點考慮：
+1. 股息殖利率穩定的ETF和個股
+2. 具有長期成長潛力的優質企業
+3. 分散風險的資產配置
+4. 適合長期持有的投資標的
+5. 避免過度投機和短期波動
+
+投資金額範圍：${this.MIN_INVESTMENT}-${this.MAX_INVESTMENT} NTD
+`;
+
+      // 讓AI根據穩健型策略決定投資金額和標的
       const advice = await aiService.generateInvestmentAdvice(
         baseInvestment,
         activeHoldingSymbols,
         userHoldings,
-        mapForAI
+        mapForAI,
+        investmentPrompt
       );
 
       // 確保投資金額在合理範圍內
@@ -174,10 +188,10 @@ export class MultiAIAdviceService {
             });
           }
 
-          // 在模型之間添加延遲，避免API限制
+          // 在模型之間添加更長的延遲，避免API限制
           if (models.indexOf(model) < models.length - 1) {
-            console.log('⏳ 等待 2 秒後處理下一個模型...');
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            console.log('⏳ 等待 10 秒後處理下一個模型...');
+            await new Promise(resolve => setTimeout(resolve, 10000));
           }
 
         } catch (error) {

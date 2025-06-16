@@ -39,62 +39,98 @@ export class OpenRouterAIService implements AIService {
       allStocksData
     );
 
-    try {
-      const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.config.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: this.config.model,
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 4000
-        })
-      });
+    // 實現重試機制來處理速率限制
+    const maxRetries = 3;
+    let lastError: Error | null = null;
 
-      if (!response.ok) {
-        throw new Error(`API 請求失敗: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content;
-
-      if (!content) {
-        throw new Error('AI 回應內容為空');
-      }
-
-      // 解析 JSON 回應
-      let geminiResponse: GeminiApiResponse;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        // 移除可能的 markdown 代碼塊標記
-        const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
-        geminiResponse = JSON.parse(cleanContent);
-      } catch (parseError) {
-        console.error('JSON 解析錯誤:', parseError);
-        throw new Error('AI 回應格式無效，無法解析建議');
-      }
+        console.log(`🤖 ${this.config.name} - 嘗試 ${attempt}/${maxRetries}`);
 
-      return this.transformToInvestmentAdvice(
-        geminiResponse,
-        userMaxMonthlyInvestment,
-        userHoldings,
-        allStocksData
-      );
+        const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.config.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: this.config.model,
+            messages: [
+              {
+                role: 'user',
+                content: prompt
+              }
+            ],
+            temperature: 0.7,
+            max_tokens: 4000
+          })
+        });
 
-    } catch (error) {
-      console.error(`${this.config.name} AI 服務錯誤:`, error);
-      if (error instanceof Error) {
-        throw new Error(`${this.config.name} 服務錯誤: ${error.message}`);
+        if (!response.ok) {
+          const errorText = await response.text();
+
+          // 處理速率限制錯誤
+          if (response.status === 429) {
+            const waitTime = attempt * 5000; // 5秒, 10秒, 15秒
+            console.log(`⏳ ${this.config.name} 遇到速率限制，等待 ${waitTime/1000} 秒後重試...`);
+
+            if (attempt < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+              continue;
+            }
+          }
+
+          throw new Error(`API 請求失敗: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content;
+
+        if (!content) {
+          throw new Error('AI 回應內容為空');
+        }
+
+        // 解析 JSON 回應
+        let geminiResponse: GeminiApiResponse;
+        try {
+          // 移除可能的 markdown 代碼塊標記
+          const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
+          geminiResponse = JSON.parse(cleanContent);
+        } catch (parseError) {
+          console.error('JSON 解析錯誤:', parseError);
+          throw new Error('AI 回應格式無效，無法解析建議');
+        }
+
+        console.log(`✅ ${this.config.name} 成功生成建議`);
+        return this.transformToInvestmentAdvice(
+          geminiResponse,
+          userMaxMonthlyInvestment,
+          userHoldings,
+          allStocksData
+        );
+
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('未知錯誤');
+        console.error(`❌ ${this.config.name} 嘗試 ${attempt} 失敗:`, lastError.message);
+
+        // 如果不是速率限制錯誤，直接拋出
+        if (!lastError.message.includes('429') && !lastError.message.includes('速率限制')) {
+          break;
+        }
+
+        // 如果是最後一次嘗試，跳出循環
+        if (attempt === maxRetries) {
+          break;
+        }
       }
-      throw new Error(`${this.config.name} 服務發生未知錯誤`);
     }
+
+    // 所有重試都失敗了
+    console.error(`❌ ${this.config.name} 所有重試都失敗`);
+    if (lastError) {
+      throw new Error(`${this.config.name} 服務錯誤: ${lastError.message}`);
+    }
+    throw new Error(`${this.config.name} 服務發生未知錯誤`);
   }
 
   private constructPrompt(
