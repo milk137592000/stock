@@ -16,9 +16,8 @@ base_url="https://openrouter.ai/api/v1"
 api_key = "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"
 
 
-### Phi
-model="microsoft/phi-4-reasoning-plus:free"
+### Meta
+model="meta-llama/llama-4-maverick:free"
 base_url="https://openrouter.ai/api/v1"
-api_key = "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"
-
+api_key = "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"
 
