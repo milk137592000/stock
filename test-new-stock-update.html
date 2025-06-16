@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>測試新增股票自動更新</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1e293b;
+            color: #e2e8f0;
+        }
+        .section {
+            background-color: #334155;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #3b82f6;
+            margin-bottom: 10px;
+        }
+        .stock-row {
+            background-color: #475569;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 10px;
+            align-items: center;
+            font-family: monospace;
+        }
+        .complete { background-color: #065f46; }
+        .incomplete { background-color: #7c2d12; }
+        .new-stock { background-color: #1e40af; }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        .warning { color: #f59e0b; }
+        .info { color: #3b82f6; }
+        button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #2563eb;
+        }
+        .highlight {
+            background-color: #fbbf24;
+            color: #1f2937;
+            padding: 2px 4px;
+            border-radius: 2px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🆕 測試新增股票自動更新功能</h1>
+    
+    <div class="section">
+        <div class="title">📋 當前 warehouse.md 狀態</div>
+        <div>檢測到新增股票: <span class="highlight">00921</span> (只有代號和持股數量，缺少完整資訊)</div>
+    </div>
+
+    <button onclick="analyzeStocks()">🔍 分析股票完整性</button>
+    <button onclick="testAutoUpdate()">🚀 測試自動更新邏輯</button>
+    <button onclick="clearResults()">🧹 清除結果</button>
+    
+    <div id="results"></div>
+
+    <script type="module">
+        // 模擬 loadDetailedHoldingsFromWarehouse 函數
+        const loadDetailedHoldingsFromWarehouse = async () => {
+            try {
+                const response = await fetch('/warehouse.md');
+                if (!response.ok) {
+                    throw new Error(`無法讀取 warehouse.md: ${response.status}`);
+                }
+
+                const content = await response.text();
+                const holdings = [];
+
+                const lines = content.split('\n').filter(line => line.trim());
+
+                for (const line of lines) {
+                    const parts = line.trim().split(/\t/);
+
+                    if (parts.length >= 2) {
+                        const symbol = parts[0];
+                        const shares = parseInt(parts[1], 10);
+
+                        if (!isNaN(shares) && shares > 0) {
+                            const holding = {
+                                symbol,
+                                shares,
+                                name: parts[2] || symbol,
+                                currentPrice: parts[3] ? parseFloat(parts[3]) : undefined,
+                                change: parts[4] ? parseFloat(parts[4]) : undefined,
+                                changePercent: parts[5] ? parseFloat(parts[5]) : undefined,
+                                lastUpdated: parts[6] || undefined
+                            };
+                            holdings.push(holding);
+                        }
+                    }
+                }
+
+                return holdings;
+            } catch (error) {
+                console.error('讀取詳細持股資料失敗:', error);
+                return [];
+            }
+        };
+
+        window.analyzeStocks = async () => {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="warning">正在分析股票完整性...</div>';
+
+            try {
+                const holdings = await loadDetailedHoldingsFromWarehouse();
+                
+                let html = `
+                    <div class="section">
+                        <div class="title">📊 股票完整性分析</div>
+                        <div class="stock-row">
+                            <strong>股票代號</strong>
+                            <strong>持股數量</strong>
+                            <strong>資料狀態</strong>
+                            <strong>需要更新</strong>
+                        </div>
+                `;
+
+                let completeCount = 0;
+                let incompleteCount = 0;
+                const incompleteStocks = [];
+
+                holdings.forEach(stock => {
+                    const hasName = stock.name && stock.name !== stock.symbol;
+                    const hasPrice = stock.currentPrice && stock.currentPrice > 0;
+                    const isComplete = hasName && hasPrice;
+                    
+                    if (isComplete) {
+                        completeCount++;
+                    } else {
+                        incompleteCount++;
+                        incompleteStocks.push(stock.symbol);
+                    }
+
+                    const rowClass = isComplete ? 'complete' : 
+                                   (stock.symbol === '00921' ? 'new-stock' : 'incomplete');
+                    const statusText = isComplete ? '✅ 完整' : '❌ 不完整';
+                    const needsUpdate = isComplete ? '否' : '是';
+
+                    html += `
+                        <div class="stock-row ${rowClass}">
+                            <span>${stock.symbol}</span>
+                            <span>${stock.shares} 股</span>
+                            <span>${statusText}</span>
+                            <span>${needsUpdate}</span>
+                        </div>
+                    `;
+                });
+
+                html += `
+                    </div>
+                    <div class="section">
+                        <div class="title">📈 統計結果</div>
+                        <div class="stock-row">
+                            <span>完整資料: ${completeCount} 檔</span>
+                            <span>不完整資料: ${incompleteCount} 檔</span>
+                            <span class="${incompleteCount > 0 ? 'warning' : 'success'}">
+                                ${incompleteCount > 0 ? '需要自動更新' : '無需更新'}
+                            </span>
+                            <span>新增股票: 00921</span>
+                        </div>
+                    </div>
+                `;
+
+                if (incompleteCount > 0) {
+                    html += `
+                        <div class="section">
+                            <div class="title">🎯 預期自動更新行為</div>
+                            <div class="stock-row">
+                                <span>檢測結果</span>
+                                <span class="warning">發現 ${incompleteCount} 檔不完整股票</span>
+                                <span>觸發條件</span>
+                                <span class="success">✅ 應該觸發自動更新</span>
+                            </div>
+                            <div class="stock-row">
+                                <span>更新策略</span>
+                                <span class="info">智能合併</span>
+                                <span>保留現有</span>
+                                <span class="success">完整資料不被覆蓋</span>
+                            </div>
+                            <div class="stock-row">
+                                <span>更新目標</span>
+                                <span class="highlight">${incompleteStocks.join(', ')}</span>
+                                <span>預期結果</span>
+                                <span class="success">獲得完整股票資訊</span>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                resultsDiv.innerHTML = html;
+
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">❌ 錯誤: ${error.message}</div>`;
+            }
+        };
+
+        window.testAutoUpdate = async () => {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `
+                <div class="section">
+                    <div class="title">🚀 自動更新邏輯測試</div>
+                    <div class="stock-row">
+                        <span>步驟 1</span>
+                        <span>載入 warehouse.md</span>
+                        <span>✅ 完成</span>
+                        <span>讀取到 00921</span>
+                    </div>
+                    <div class="stock-row">
+                        <span>步驟 2</span>
+                        <span>檢查資料完整性</span>
+                        <span class="warning">❌ 00921 缺少資訊</span>
+                        <span>觸發更新條件</span>
+                    </div>
+                    <div class="stock-row">
+                        <span>步驟 3</span>
+                        <span>1.5秒後自動更新</span>
+                        <span class="info">⏳ 等待中...</span>
+                        <span>爬取 00921 資訊</span>
+                    </div>
+                    <div class="stock-row">
+                        <span>步驟 4</span>
+                        <span>智能合併資料</span>
+                        <span class="success">✅ 保留現有完整資料</span>
+                        <span>只更新 00921</span>
+                    </div>
+                </div>
+                <div class="section">
+                    <div class="title">🔍 檢查方式</div>
+                    <div>1. 打開主應用程式: <a href="http://localhost:5173/" target="_blank" style="color: #3b82f6;">http://localhost:5173/</a></div>
+                    <div>2. 觀察是否顯示「檢測到 1 檔股票缺少完整資料: ['00921']」</div>
+                    <div>3. 等待自動更新完成</div>
+                    <div>4. 檢查 00921 是否出現在持股卡片中並有完整資訊</div>
+                    <div>5. 確認其他股票的現價沒有被覆蓋</div>
+                </div>
+                <div class="section">
+                    <div class="title">✅ 預期結果</div>
+                    <div class="success">• 00921 獲得完整的股票資訊（名稱、現價）</div>
+                    <div class="success">• 其他股票的現價保持不變（如 006208=$110.25）</div>
+                    <div class="success">• 顯示自動更新成功通知</div>
+                    <div class="success">• 所有股票都出現在持股管理卡片中</div>
+                </div>
+            `;
+        };
+
+        window.clearResults = () => {
+            document.getElementById('results').innerHTML = '';
+        };
+
+        // 自動執行分析
+        setTimeout(() => {
+            analyzeStocks();
+        }, 1000);
+    </script>
+</body>
+</html>

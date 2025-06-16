@@ -1,0 +1,20 @@
+{
+  "name": "warehouse-updater-service",
+  "version": "1.0.0",
+  "description": "自動更新 warehouse.md 檔案的後端服務",
+  "main": "warehouse-updater.js",
+  "scripts": {
+    "start": "node warehouse-updater.js",
+    "dev": "nodemon warehouse-updater.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": ["warehouse", "stock", "auto-update"],
+  "author": "Investment App",
+  "license": "MIT"
+}

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>測試 Warehouse.md 解析</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1e293b;
+            color: #e2e8f0;
+        }
+        .test-result {
+            background-color: #334155;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        .stock-info {
+            background-color: #475569;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #2563eb;
+        }
+    </style>
+</head>
+<body>
+    <h1>測試 Warehouse.md 解析功能</h1>
+    
+    <button onclick="testWarehouseParsing()">測試解析 warehouse.md</button>
+    
+    <div id="result"></div>
+
+    <script type="module">
+        // 模擬 loadDetailedHoldingsFromWarehouse 函數
+        const loadDetailedHoldingsFromWarehouse = async () => {
+            try {
+                const response = await fetch('/warehouse.md');
+                if (!response.ok) {
+                    throw new Error(`無法讀取 warehouse.md: ${response.status}`);
+                }
+
+                const content = await response.text();
+                const holdings = [];
+
+                // 解析每一行的持股資料
+                const lines = content.split('\n').filter(line => line.trim());
+
+                for (const line of lines) {
+                    const parts = line.trim().split(/\t/); // 使用tab分隔
+
+                    if (parts.length >= 2) {
+                        const symbol = parts[0];
+                        const shares = parseInt(parts[1], 10);
+
+                        if (!isNaN(shares) && shares > 0) {
+                            const holding = {
+                                symbol,
+                                shares,
+                                name: parts[2] || symbol,
+                                currentPrice: parts[3] ? parseFloat(parts[3]) : undefined,
+                                change: parts[4] ? parseFloat(parts[4]) : undefined,
+                                changePercent: parts[5] ? parseFloat(parts[5]) : undefined,
+                                lastUpdated: parts[6] || undefined
+                            };
+                            holdings.push(holding);
+                        }
+                    }
+                }
+
+                return holdings;
+            } catch (error) {
+                console.error('讀取詳細持股資料失敗:', error);
+                return [];
+            }
+        };
+
+        window.testWarehouseParsing = async () => {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<div>測試中...</div>';
+
+            try {
+                const holdings = await loadDetailedHoldingsFromWarehouse();
+                
+                if (holdings.length > 0) {
+                    let html = `<div class="success">✅ 成功解析 ${holdings.length} 檔股票</div>`;
+                    
+                    holdings.forEach(holding => {
+                        html += `
+                            <div class="stock-info">
+                                <strong>${holding.symbol} - ${holding.name}</strong><br>
+                                持股: ${holding.shares} 股<br>
+                                現價: $${holding.currentPrice || 'N/A'}<br>
+                                漲跌: ${holding.change || 'N/A'} (${holding.changePercent || 'N/A'}%)<br>
+                                更新時間: ${holding.lastUpdated || 'N/A'}
+                            </div>
+                        `;
+                    });
+                    
+                    resultDiv.innerHTML = html;
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ 沒有解析到任何股票資料</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 錯誤: ${error.message}</div>`;
+            }
+        };
+    </script>
+</body>
+</html>

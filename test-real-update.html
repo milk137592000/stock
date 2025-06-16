@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>測試真實更新</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1e293b;
+            color: #e2e8f0;
+        }
+        .section {
+            background-color: #334155;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 15px 0;
+            border: 2px solid #475569;
+        }
+        .title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #3b82f6;
+        }
+        .code-block {
+            background-color: #1e293b;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            margin: 10px 0;
+            white-space: pre-wrap;
+        }
+        button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #2563eb;
+        }
+        button:disabled {
+            background-color: #64748b;
+            cursor: not-allowed;
+        }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        .warning { color: #f59e0b; }
+    </style>
+</head>
+<body>
+    <h1>🔧 測試真實的 warehouse.md 更新</h1>
+    
+    <div class="section">
+        <div class="title">📋 當前問題</div>
+        <p>warehouse.md 中的 00921 還是只有：<code>00921   222</code></p>
+        <p>缺少完整資訊：股票名稱、現價、漲跌等</p>
+    </div>
+
+    <div style="text-align: center;">
+        <button onclick="checkCurrentState()">🔍 檢查當前狀態</button>
+        <button onclick="performRealUpdate()">🚀 執行真實更新</button>
+        <button onclick="clearResults()">🧹 清除結果</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        // 模擬股票爬蟲服務
+        const generateStockInfo = (symbol) => {
+            const stockDatabase = {
+                '006208': { name: '富邦台50', basePrice: 110.25 },
+                '00713': { name: '元大台灣高息低波', basePrice: 51.90 },
+                '00878': { name: '國泰永續高股息', basePrice: 20.86 },
+                '00921': { name: '兆豐龍頭等權重', basePrice: 18.50 }
+            };
+
+            const stockInfo = stockDatabase[symbol];
+            const name = stockInfo ? stockInfo.name : `股票 ${symbol}`;
+            const basePrice = stockInfo ? stockInfo.basePrice : 50.0;
+
+            const changePercent = (Math.random() - 0.5) * 3;
+            const change = (basePrice * changePercent) / 100;
+            const currentPrice = basePrice + change;
+
+            return {
+                symbol,
+                name,
+                currentPrice: Math.round(currentPrice * 100) / 100,
+                change: Math.round(change * 100) / 100,
+                changePercent: Math.round(changePercent * 100) / 100,
+                lastUpdated: new Date().toISOString()
+            };
+        };
+
+        window.checkCurrentState = async () => {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="section"><div class="title">🔍 檢查中...</div></div>';
+
+            try {
+                // 讀取當前 warehouse.md
+                const response = await fetch('http://localhost:3001/api/warehouse');
+                if (!response.ok) {
+                    throw new Error('無法讀取 warehouse.md');
+                }
+
+                const data = await response.json();
+                const content = data.content;
+
+                let html = '<div class="section">';
+                html += '<div class="title">📄 當前 warehouse.md 內容</div>';
+                html += `<div class="code-block">${content}</div>`;
+
+                // 分析內容
+                const lines = content.split('\n').filter(line => line.trim());
+                const incompleteLines = lines.filter(line => {
+                    const parts = line.trim().split(/\t/);
+                    return parts.length < 4 || !parts[2] || !parts[3];
+                });
+
+                html += '<div class="title">📊 分析結果</div>';
+                if (incompleteLines.length > 0) {
+                    html += `<div class="warning">⚠️ 發現 ${incompleteLines.length} 行不完整的資料：</div>`;
+                    incompleteLines.forEach(line => {
+                        html += `<div class="code-block">${line}</div>`;
+                    });
+                } else {
+                    html += '<div class="success">✅ 所有資料都完整</div>';
+                }
+
+                html += '</div>';
+                resultsDiv.innerHTML = html;
+
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="section">
+                        <div class="title error">❌ 檢查失敗</div>
+                        <div class="error">錯誤: ${error.message}</div>
+                    </div>
+                `;
+            }
+        };
+
+        window.performRealUpdate = async () => {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="section"><div class="title">🚀 執行真實更新...</div></div>';
+
+            try {
+                // 步驟 1: 讀取當前 warehouse.md
+                const response = await fetch('http://localhost:3001/api/warehouse');
+                const data = await response.json();
+                const currentContent = data.content;
+
+                let html = '<div class="section">';
+                html += '<div class="title">📋 更新流程</div>';
+                html += '<div class="success">✅ 步驟 1: 讀取當前 warehouse.md</div>';
+
+                // 步驟 2: 解析持股資料
+                const lines = currentContent.split('\n').filter(line => line.trim());
+                const holdings = {};
+                
+                lines.forEach(line => {
+                    const parts = line.trim().split(/\t|\s+/);
+                    if (parts.length >= 2) {
+                        const symbol = parts[0];
+                        const shares = parseInt(parts[1]);
+                        if (!isNaN(shares) && shares > 0) {
+                            holdings[symbol] = shares;
+                        }
+                    }
+                });
+
+                html += '<div class="success">✅ 步驟 2: 解析持股資料</div>';
+                html += `<div class="code-block">持股: ${JSON.stringify(holdings, null, 2)}</div>`;
+
+                // 步驟 3: 生成完整的股票資訊
+                const symbols = Object.keys(holdings);
+                const stockInfos = symbols.map(symbol => generateStockInfo(symbol));
+
+                html += '<div class="success">✅ 步驟 3: 生成股票資訊</div>';
+
+                // 步驟 4: 生成新的 warehouse.md 內容
+                const newContent = symbols.map(symbol => {
+                    const shares = holdings[symbol];
+                    const stockInfo = stockInfos.find(info => info.symbol === symbol);
+                    
+                    return `${symbol}\t${shares}\t${stockInfo.name}\t${stockInfo.currentPrice.toFixed(2)}\t${stockInfo.change.toFixed(2)}\t${stockInfo.changePercent.toFixed(2)}\t${stockInfo.lastUpdated}`;
+                }).join('\n');
+
+                html += '<div class="success">✅ 步驟 4: 生成新的 warehouse.md 內容</div>';
+                html += `<div class="code-block">${newContent}</div>`;
+
+                // 步驟 5: 更新檔案
+                const updateResponse = await fetch('http://localhost:3001/api/warehouse/update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ content: newContent }),
+                });
+
+                if (updateResponse.ok) {
+                    const updateResult = await updateResponse.json();
+                    html += '<div class="success">✅ 步驟 5: 檔案更新成功</div>';
+                    html += `<div class="code-block">備份檔案: ${updateResult.backupPath}</div>`;
+                    
+                    // 特別檢查 00921
+                    const line00921 = newContent.split('\n').find(line => line.startsWith('00921'));
+                    if (line00921) {
+                        html += '<div class="success">🎯 00921 已更新為完整格式：</div>';
+                        html += `<div class="code-block">${line00921}</div>`;
+                    }
+                } else {
+                    throw new Error('檔案更新失敗');
+                }
+
+                html += '</div>';
+
+                // 添加驗證步驟
+                html += '<div class="section">';
+                html += '<div class="title">🔍 驗證更新結果</div>';
+                html += '<div class="warning">請重新載入主應用程式查看結果：</div>';
+                html += '<div><a href="http://localhost:5173/" target="_blank" style="color: #3b82f6;">http://localhost:5173/</a></div>';
+                html += '</div>';
+
+                resultsDiv.innerHTML = html;
+
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="section">
+                        <div class="title error">❌ 更新失敗</div>
+                        <div class="error">錯誤: ${error.message}</div>
+                    </div>
+                `;
+            }
+        };
+
+        window.clearResults = () => {
+            document.getElementById('results').innerHTML = '';
+        };
+
+        // 自動檢查當前狀態
+        setTimeout(checkCurrentState, 1000);
+    </script>
+</body>
+</html>

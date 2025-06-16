@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warehouse.md 更新流程演示</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1e293b;
+            color: #e2e8f0;
+        }
+        .flow-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .step {
+            background-color: #334155;
+            border: 2px solid #475569;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .step.active {
+            border-color: #3b82f6;
+            background-color: #1e40af;
+            transform: scale(1.05);
+        }
+        .step.completed {
+            border-color: #10b981;
+            background-color: #065f46;
+        }
+        .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #475569;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin: 0 auto 10px;
+        }
+        .step.active .step-number {
+            background-color: #3b82f6;
+        }
+        .step.completed .step-number {
+            background-color: #10b981;
+        }
+        .step-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #e2e8f0;
+        }
+        .step-desc {
+            font-size: 14px;
+            color: #94a3b8;
+            line-height: 1.4;
+        }
+        .arrow {
+            position: absolute;
+            right: -15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 24px;
+            color: #475569;
+        }
+        .step:last-child .arrow {
+            display: none;
+        }
+        .demo-section {
+            background-color: #334155;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .current-state {
+            background-color: #7c2d12;
+            border: 1px solid #ea580c;
+        }
+        .expected-state {
+            background-color: #065f46;
+            border: 1px solid #10b981;
+        }
+        .code-block {
+            background-color: #1e293b;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2563eb;
+        }
+        .highlight {
+            background-color: #fbbf24;
+            color: #1f2937;
+            padding: 2px 4px;
+            border-radius: 2px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>📁 Warehouse.md 更新流程演示</h1>
+    
+    <div class="demo-section current-state">
+        <h2>🔍 當前狀態</h2>
+        <p>warehouse.md 中的 <span class="highlight">00921</span> 只有股票代號和持股數量：</p>
+        <div class="code-block">00921   222</div>
+        <p>缺少：股票名稱、現價、漲跌資訊、更新時間</p>
+    </div>
+
+    <div class="demo-section expected-state">
+        <h2>🎯 預期結果</h2>
+        <p>更新後的 warehouse.md 應該包含完整資訊：</p>
+        <div class="code-block">00921	222	兆豐龍頭等權重	18.50	0.25	1.37	2025-06-16T19:45:00.000Z</div>
+        <p>包含：股票代號、持股數量、名稱、現價、漲跌、漲跌%、更新時間</p>
+    </div>
+
+    <h2>🔄 完整更新流程</h2>
+    <div class="flow-container">
+        <div class="step" id="step1">
+            <div class="step-number">1</div>
+            <div class="step-title">讀取 warehouse.md</div>
+            <div class="step-desc">載入現有持股資料，檢測不完整的股票</div>
+            <div class="arrow">→</div>
+        </div>
+        
+        <div class="step" id="step2">
+            <div class="step-number">2</div>
+            <div class="step-title">爬蟲最新資訊</div>
+            <div class="step-desc">獲取 00921 的完整股票資訊</div>
+            <div class="arrow">→</div>
+        </div>
+        
+        <div class="step" id="step3">
+            <div class="step-number">3</div>
+            <div class="step-title">生成新檔案</div>
+            <div class="step-desc">創建包含完整資訊的 warehouse.md</div>
+            <div class="arrow">→</div>
+        </div>
+        
+        <div class="step" id="step4">
+            <div class="step-number">4</div>
+            <div class="step-title">手動替換</div>
+            <div class="step-desc">下載並替換原始檔案</div>
+            <div class="arrow">→</div>
+        </div>
+        
+        <div class="step" id="step5">
+            <div class="step-number">5</div>
+            <div class="step-title">重新載入</div>
+            <div class="step-desc">讀取更新後的檔案，更新卡片</div>
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <h2>🚀 開始測試</h2>
+        <p>點擊下方按鈕開始測試完整的更新流程：</p>
+        <button onclick="startDemo()">開始演示</button>
+        <button onclick="openMainApp()">打開主應用程式</button>
+        <button onclick="resetDemo()">重置演示</button>
+    </div>
+
+    <div id="demo-log" class="demo-section" style="display: none;">
+        <h3>📋 演示日誌</h3>
+        <div id="log-content"></div>
+    </div>
+
+    <div class="demo-section">
+        <h2>⚠️ 重要說明</h2>
+        <ul style="text-align: left; color: #94a3b8;">
+            <li><strong>瀏覽器限制</strong>：由於安全限制，無法直接修改本地檔案</li>
+            <li><strong>半自動流程</strong>：需要手動下載和替換檔案</li>
+            <li><strong>完整同步</strong>：替換檔案後重新載入頁面即可完成同步</li>
+            <li><strong>備份建議</strong>：更新前建議備份原始 warehouse.md</li>
+        </ul>
+    </div>
+
+    <script>
+        let currentStep = 0;
+        const totalSteps = 5;
+
+        function startDemo() {
+            document.getElementById('demo-log').style.display = 'block';
+            currentStep = 0;
+            nextStep();
+        }
+
+        function nextStep() {
+            if (currentStep > 0) {
+                document.getElementById(`step${currentStep}`).classList.remove('active');
+                document.getElementById(`step${currentStep}`).classList.add('completed');
+            }
+            
+            currentStep++;
+            
+            if (currentStep <= totalSteps) {
+                document.getElementById(`step${currentStep}`).classList.add('active');
+                logStep(currentStep);
+                
+                if (currentStep < totalSteps) {
+                    setTimeout(nextStep, 2000);
+                }
+            }
+        }
+
+        function logStep(step) {
+            const logContent = document.getElementById('log-content');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            let message = '';
+            switch(step) {
+                case 1:
+                    message = '✅ 讀取 warehouse.md - 檢測到 00921 缺少完整資訊';
+                    break;
+                case 2:
+                    message = '🕷️ 爬蟲獲取 00921 資訊 - 兆豐龍頭等權重 $18.50';
+                    break;
+                case 3:
+                    message = '📝 生成新的 warehouse.md 內容 - 包含完整股票資訊';
+                    break;
+                case 4:
+                    message = '📁 顯示檔案管理器 - 引導用戶下載和替換檔案';
+                    break;
+                case 5:
+                    message = '🔄 重新載入完成 - 所有股票資料已同步';
+                    break;
+            }
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = 'code-block';
+            logEntry.innerHTML = `[${timestamp}] 步驟 ${step}: ${message}`;
+            logContent.appendChild(logEntry);
+            logContent.scrollTop = logContent.scrollHeight;
+        }
+
+        function openMainApp() {
+            window.open('http://localhost:5173/', '_blank');
+        }
+
+        function resetDemo() {
+            currentStep = 0;
+            document.getElementById('demo-log').style.display = 'none';
+            document.getElementById('log-content').innerHTML = '';
+            
+            for (let i = 1; i <= totalSteps; i++) {
+                const step = document.getElementById(`step${i}`);
+                step.classList.remove('active', 'completed');
+            }
+        }
+
+        // 自動開始演示
+        setTimeout(startDemo, 1000);
+    </script>
+</body>
+</html>

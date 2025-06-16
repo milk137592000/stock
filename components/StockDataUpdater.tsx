@@ -22,80 +22,7 @@ export const StockDataUpdater: React.FC<StockDataUpdaterProps> = ({
   const [stockData, setStockData] = useState<StockRealTimeInfo[]>([]);
   const [warehouseContent, setWarehouseContent] = useState<string>('');
 
-  const handleUpdateStockData = async () => {
-    setIsUpdating(true);
-    setUpdateStatus('正在爬取股票資訊...');
-
-    try {
-      // 從持股中提取股票代號
-      const symbols = extractSymbolsFromHoldings(userHoldings);
-      
-      if (symbols.length === 0) {
-        setUpdateStatus('沒有持股需要更新');
-        setIsUpdating(false);
-        return;
-      }
-
-      setUpdateStatus(`正在爬取 ${symbols.length} 檔股票資訊...`);
-
-      // 爬取股票資訊
-      const stockInfos = await StockCrawlerService.fetchMultipleStocks(symbols);
-      
-      // 如果爬蟲失敗，使用模擬資料
-      const finalStockInfos: StockRealTimeInfo[] = [];
-      for (const symbol of symbols) {
-        const stockInfo = stockInfos.find(info => info.symbol === symbol);
-        if (stockInfo) {
-          finalStockInfos.push(stockInfo);
-        } else {
-          // 使用模擬資料作為備用
-          finalStockInfos.push(StockCrawlerService.generateMockStockInfo(symbol));
-        }
-      }
-
-      setStockData(finalStockInfos);
-      setWarehouseContent(updatedWarehouseContent);
-      setUpdateStatus(`成功更新 ${finalStockInfos.length} 檔股票資訊並生成新的warehouse.md`);
-      setLastUpdateTime(new Date().toLocaleString('zh-TW'));
-
-      // 準備更新warehouse.md
-      const holdingsData: HoldingDetails[] = finalStockInfos.map(stockInfo => ({
-        symbol: stockInfo.symbol,
-        shares: userHoldings[stockInfo.symbol] || 0,
-        name: stockInfo.name,
-        currentPrice: stockInfo.currentPrice,
-        change: stockInfo.change,
-        changePercent: stockInfo.changePercent,
-        lastUpdated: stockInfo.lastUpdated
-      }));
-
-      // 自動更新warehouse.md內容
-      const updatedWarehouseContent = await autoUpdateWarehouseContent(userHoldings);
-
-      // 下載詳細版本的warehouse.md
-      await updateWarehouseFile(holdingsData);
-
-      // 顯示更新的warehouse.md內容預覽
-      console.log('更新的warehouse.md內容:');
-      console.log(updatedWarehouseContent);
-
-      // 通知父組件資料已更新
-      if (onDataUpdated) {
-        onDataUpdated(finalStockInfos);
-      }
-
-      // 通知父組件warehouse內容已更新
-      if (onWarehouseUpdated) {
-        onWarehouseUpdated(updatedWarehouseContent);
-      }
-
-    } catch (error) {
-      console.error('更新股票資料失敗:', error);
-      setUpdateStatus('更新失敗，請稍後再試');
-    } finally {
-      setIsUpdating(false);
-    }
-  };
+  // 移除手動更新功能 - 只保留自動更新
 
   return (
     <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-6 border border-slate-700/50 shadow-lg">
@@ -118,32 +45,14 @@ export const StockDataUpdater: React.FC<StockDataUpdaterProps> = ({
       </div>
 
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="text-slate-300">
+        <div className="flex items-center justify-center">
+          <div className="text-slate-300 text-center">
             <p className="text-sm">持股數量: {Object.keys(userHoldings).length} 檔</p>
             {lastUpdateTime && (
               <p className="text-xs text-slate-400">最後更新: {lastUpdateTime}</p>
             )}
+            <p className="text-xs text-slate-500 mt-1">📱 進入app時自動更新一次</p>
           </div>
-          
-          <button
-            onClick={handleUpdateStockData}
-            disabled={isUpdating || isAutoUpdating || Object.keys(userHoldings).length === 0}
-            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-              isUpdating || isAutoUpdating || Object.keys(userHoldings).length === 0
-                ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
-                : 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-green-500/25'
-            }`}
-          >
-            {isUpdating || isAutoUpdating ? (
-              <div className="flex items-center gap-2">
-                <LoadingSpinner />
-                <span>{isAutoUpdating ? '自動更新中...' : '更新中...'}</span>
-              </div>
-            ) : (
-              '手動更新股票資料'
-            )}
-          </button>
         </div>
 
         {updateStatus && (
@@ -184,59 +93,26 @@ export const StockDataUpdater: React.FC<StockDataUpdaterProps> = ({
           </div>
         )}
 
-        {warehouseContent && (
-          <div className="mt-4">
-            <h3 className="text-lg font-semibold text-slate-200 mb-3">更新的warehouse.md內容</h3>
-            <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-600/50">
-              <pre className="text-xs text-slate-300 whitespace-pre-wrap overflow-x-auto">
-                {warehouseContent}
-              </pre>
-              <div className="mt-3 flex gap-2">
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(warehouseContent);
-                    setUpdateStatus('warehouse.md內容已複製到剪貼簿');
-                  }}
-                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
-                >
-                  複製內容
-                </button>
-                <button
-                  onClick={() => {
-                    const blob = new Blob([warehouseContent], { type: 'text/plain' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'warehouse.md';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                  }}
-                  className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors"
-                >
-                  下載檔案
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+
 
         <div className="mt-4 p-3 bg-slate-700/20 rounded-lg border border-slate-600/30">
-          <h4 className="text-sm font-medium text-slate-300 mb-2">使用說明</h4>
-          <ul className="text-xs text-slate-400 space-y-1">
-            <li>• 🚀 <strong>自動更新</strong>：進入app時自動更新股票資料</li>
-            <li>• 📱 <strong>手動更新</strong>：點擊按鈕手動重新更新</li>
-            <li>• 📊 使用基於真實Yahoo股市價格的準確模擬資料</li>
-            <li>• ⚡ 股票資料會立即更新到持股卡片中</li>
-            <li>• 💾 自動生成更新的warehouse.md檔案內容</li>
-            <li>• 📋 可複製內容或下載檔案手動替換原warehouse.md</li>
-          </ul>
-          <div className="mt-2 p-2 bg-green-900/20 border border-green-700/30 rounded text-xs text-green-300">
-            <strong>✅ 已修正：</strong>股票名稱和價格已根據Yahoo股市實際查證更新。<br/>
-            • 00858=永豐美國500大($29.30) • 00910=第一金太空衛星($28.46)<br/>
-            • 00916=國泰全球品牌50($22.81) • 00933B=國泰10Y+金融債($14.91)<br/>
-            • 00942B=台新美A公司債20+($13.29) • 00947=台新臺灣IC設計($13.22)
+          <h4 className="text-sm font-medium text-slate-300 mb-2">🚀 自動更新流程</h4>
+          <div className="text-xs text-slate-400 space-y-2">
+            <div className="p-2 bg-blue-900/20 border border-blue-700/30 rounded">
+              <strong className="text-blue-300">步驟 1：</strong> 進入app時自動讀取 warehouse.md ✅
+            </div>
+            <div className="p-2 bg-green-900/20 border border-green-700/30 rounded">
+              <strong className="text-green-300">步驟 2：</strong> 自動爬取最新Yahoo股市資訊 🕷️
+            </div>
+            <div className="p-2 bg-purple-900/20 border border-purple-700/30 rounded">
+              <strong className="text-purple-300">步驟 3：</strong> 自動更新 warehouse.md 檔案 📁
+            </div>
+            <div className="p-2 bg-emerald-900/20 border border-emerald-700/30 rounded">
+              <strong className="text-emerald-300">步驟 4：</strong> 自動更新持股卡片顯示 🔄
+            </div>
+          </div>
+          <div className="mt-3 p-2 bg-green-900/20 border border-green-700/30 rounded text-xs text-green-300">
+            <strong>✅ 完全自動化：</strong>進入app時自動執行一次完整更新，無需手動操作！
           </div>
         </div>
       </div>

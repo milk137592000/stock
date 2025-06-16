@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>測試自動檢測邏輯</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1e293b;
+            color: #e2e8f0;
+        }
+        .test-case {
+            background-color: #334155;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            border: 2px solid #475569;
+        }
+        .test-case.incomplete {
+            border-color: #f59e0b;
+            background-color: #7c2d12;
+        }
+        .test-case.complete {
+            border-color: #10b981;
+            background-color: #065f46;
+        }
+        .title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #3b82f6;
+        }
+        .code {
+            background-color: #1e293b;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #2563eb;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 測試自動檢測邏輯</h1>
+    
+    <button onclick="testDetectionLogic()">🚀 測試檢測邏輯</button>
+    <button onclick="clearResults()">🧹 清除結果</button>
+    
+    <div id="results"></div>
+
+    <script>
+        // 模擬檢測邏輯
+        function isIncompleteStock(symbol, stockData) {
+            return !stockData || 
+                   !stockData.currentPrice || 
+                   stockData.currentPrice <= 0 || 
+                   stockData.name === symbol ||
+                   stockData.name.includes('自訂') ||
+                   stockData.name.includes('股票');
+        }
+
+        window.testDetectionLogic = () => {
+            const resultsDiv = document.getElementById('results');
+            
+            // 測試案例
+            const testCases = [
+                {
+                    symbol: '006208',
+                    stockData: {
+                        name: '富邦台50',
+                        currentPrice: 110.25,
+                        category: 'TW Stock'
+                    },
+                    description: '完整的股票資料'
+                },
+                {
+                    symbol: '00921',
+                    stockData: {
+                        name: '00921',  // 名稱等於代號
+                        currentPrice: 0,
+                        category: 'TW Stock'
+                    },
+                    description: '名稱等於代號，現價為0'
+                },
+                {
+                    symbol: '00921',
+                    stockData: {
+                        name: '兆豐龍頭等權重',
+                        currentPrice: 18.50,
+                        category: 'TW Stock'
+                    },
+                    description: '完整的 00921 資料'
+                },
+                {
+                    symbol: 'TEST01',
+                    stockData: {
+                        name: '自訂 (TEST01)',
+                        currentPrice: 0,
+                        category: '未知分類'
+                    },
+                    description: '自訂股票，名稱包含"自訂"'
+                },
+                {
+                    symbol: 'TEST02',
+                    stockData: {
+                        name: '股票 TEST02',
+                        currentPrice: 50.0,
+                        category: 'TW Stock'
+                    },
+                    description: '名稱包含"股票"字樣'
+                },
+                {
+                    symbol: 'MISSING',
+                    stockData: null,
+                    description: '沒有股票資料'
+                }
+            ];
+
+            let html = '<div class="title">🧪 檢測邏輯測試結果</div>';
+
+            testCases.forEach((testCase, index) => {
+                const isIncomplete = isIncompleteStock(testCase.symbol, testCase.stockData);
+                const cssClass = isIncomplete ? 'incomplete' : 'complete';
+                const status = isIncomplete ? '❌ 不完整' : '✅ 完整';
+                
+                html += `
+                    <div class="test-case ${cssClass}">
+                        <div class="title">測試 ${index + 1}: ${testCase.symbol}</div>
+                        <div>描述: ${testCase.description}</div>
+                        <div class="code">
+                            stockData: ${JSON.stringify(testCase.stockData, null, 2)}
+                        </div>
+                        <div><strong>檢測結果: ${status}</strong></div>
+                    </div>
+                `;
+            });
+
+            // 特別測試 00921 的情況
+            html += `
+                <div class="test-case incomplete">
+                    <div class="title">🎯 重點測試: warehouse.md 中的 00921</div>
+                    <div>當前狀況: warehouse.md 中只有 "00921   222"</div>
+                    <div>解析結果: name = "00921", currentPrice = undefined</div>
+                    <div>檢測條件:</div>
+                    <div class="code">
+                        !stockData: false
+                        !stockData.currentPrice: true ✓
+                        stockData.currentPrice <= 0: N/A
+                        stockData.name === symbol: true ✓
+                        stockData.name.includes('自訂'): false
+                        stockData.name.includes('股票'): false
+                    </div>
+                    <div><strong>結果: ❌ 應該被檢測為不完整</strong></div>
+                </div>
+            `;
+
+            resultsDiv.innerHTML = html;
+        };
+
+        window.clearResults = () => {
+            document.getElementById('results').innerHTML = '';
+        };
+
+        // 自動執行測試
+        setTimeout(testDetectionLogic, 1000);
+    </script>
+</body>
+</html>

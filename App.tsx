@@ -7,9 +7,11 @@ import { ErrorMessage } from './components/ErrorMessage';
 import { AIModelSelector } from './components/AIModelSelector';
 import { StockDataUpdater } from './components/StockDataUpdater';
 import { UpdateNotification } from './components/UpdateNotification';
+import { WarehouseFileManager } from './components/WarehouseFileManager';
 import { getInvestmentAdvice } from './services/investmentAdvisorService';
-import { loadHoldingsFromWarehouse, loadAIModelsFromConfig, AIModelConfig } from './services/dataService';
-import { StockCrawlerService, extractSymbolsFromHoldings } from './services/stockCrawlerService';
+import { loadHoldingsFromWarehouse, loadDetailedHoldingsFromWarehouse, loadAIModelsFromConfig, AIModelConfig } from './services/dataService';
+import { StockCrawlerService, extractSymbolsFromHoldings, autoUpdateWarehouseContent } from './services/stockCrawlerService';
+import { WarehouseApiService, isAutoUpdateSupported } from './services/warehouseApiService';
 import { createAIService } from './services/aiService';
 import { InvestmentAdvice, StockSymbol, UserHoldings, StockDetails, StockRealTimeInfo } from './types';
 import {
@@ -49,15 +51,43 @@ const App: React.FC = () => {
   // 新增：自動更新狀態
   const [isAutoUpdating, setIsAutoUpdating] = useState<boolean>(false);
 
+  // 新增：warehouse 文件管理器狀態
+  const [warehouseManager, setWarehouseManager] = useState<{
+    show: boolean;
+    content: string;
+  }>({
+    show: false,
+    content: ''
+  });
+
+  // 新增：自動更新支援狀態
+  const [autoUpdateSupported, setAutoUpdateSupported] = useState<boolean>(false);
+
   // 初始化資料載入
   useEffect(() => {
     const initializeData = async () => {
       setIsLoadingData(true);
       try {
-        // 載入持股資料
-        const holdingsData = await loadHoldingsFromWarehouse();
-        if (Object.keys(holdingsData).length > 0) {
+        // 載入詳細持股資料（包含現價信息）
+        const detailedHoldings = await loadDetailedHoldingsFromWarehouse();
+        if (detailedHoldings.length > 0) {
+          // 提取持股數量
+          const holdingsData: UserHoldings = {};
+          const updatedStocksMap: { [key: string]: StockDetails } = { ...currentAllStocksMap };
+
+          detailedHoldings.forEach(holding => {
+            holdingsData[holding.symbol] = holding.shares;
+
+            // 更新股票詳細信息（包含現價）
+            updatedStocksMap[holding.symbol] = {
+              name: holding.name || holding.symbol,
+              category: 'TW Stock', // 預設分類，可以根據需要調整
+              currentPrice: holding.currentPrice || 0
+            };
+          });
+
           setUserHoldings(holdingsData);
+          setCurrentAllStocksMap(updatedStocksMap);
         }
 
         // 載入 AI 模型配置
@@ -75,6 +105,16 @@ const App: React.FC = () => {
         const currentMonthIndex = new Date().getMonth();
         setCurrentMonthName(monthNames[currentMonthIndex]);
 
+        // 檢查自動更新支援
+        const autoUpdateAvailable = await isAutoUpdateSupported();
+        setAutoUpdateSupported(autoUpdateAvailable);
+
+        if (autoUpdateAvailable) {
+          console.log('✅ 自動更新服務可用 - warehouse.md 可以自動更新');
+        } else {
+          console.log('⚠️ 自動更新服務不可用 - 將使用手動下載方式');
+        }
+
       } catch (error) {
         console.error('初始化資料失敗:', error);
         setError('載入資料失敗，請檢查 warehouse.md 和 api.md 檔案');
@@ -86,15 +126,28 @@ const App: React.FC = () => {
     initializeData();
   }, []);
 
-  // 自動更新股票資料 - 在持股資料載入完成後執行
+  // 自動更新股票資料 - 只在首次進入app時執行一次
   useEffect(() => {
     if (!isLoadingData && Object.keys(userHoldings).length > 0 && !isAutoUpdating) {
-      // 延遲1.5秒後自動更新，讓用戶看到載入完成
-      const timer = setTimeout(() => {
-        autoUpdateStockData();
-      }, 1500);
+      // 檢查是否已經在這個會話中執行過自動更新
+      const hasAutoUpdatedThisSession = sessionStorage.getItem('hasAutoUpdatedThisSession');
 
-      return () => clearTimeout(timer);
+      if (!hasAutoUpdatedThisSession) {
+        console.log('🔍 首次進入app，開始檢查 warehouse.md 持股內容...');
+        console.log('📊 持股清單:', Object.keys(userHoldings));
+
+        // 只在首次進入時執行完整的股票資料更新
+        console.log('🚀 執行完整的股票資料更新（從 Yahoo 股市爬取最新資訊）...');
+        const timer = setTimeout(() => {
+          autoUpdateStockData();
+          // 標記已執行過自動更新
+          sessionStorage.setItem('hasAutoUpdatedThisSession', 'true');
+        }, 1500);
+
+        return () => clearTimeout(timer);
+      } else {
+        console.log('📋 本次會話已執行過自動更新，跳過重複更新');
+      }
     }
   }, [isLoadingData, userHoldings]);
 
@@ -165,41 +218,88 @@ const App: React.FC = () => {
   };
 
   // 新增：處理warehouse內容更新
-  const handleWarehouseUpdated = (newContent: string) => {
-    // 這裡可以選擇是否要立即更新持股資料
-    // 目前先顯示通知，讓用戶知道資料已更新
-    setNotification({
-      show: true,
-      message: '股票資料已更新到持股卡片，warehouse.md檔案已下載',
-      type: 'info'
-    });
+  const handleWarehouseUpdated = async (newContent: string) => {
+    try {
+      // 解析新的warehouse內容並更新持股資料
+      const lines = newContent.split('\n').filter(line => line.trim());
+      const updatedHoldings: UserHoldings = {};
+      const updatedStocksMap: { [key: string]: StockDetails } = { ...currentAllStocksMap };
 
-    // 3秒後自動隱藏通知
-    setTimeout(() => {
-      setNotification(prev => ({ ...prev, show: false }));
-    }, 5000);
+      for (const line of lines) {
+        const parts = line.trim().split(/\t/);
+        if (parts.length >= 2) {
+          const symbol = parts[0] as StockSymbol;
+          const shares = parseInt(parts[1], 10);
+
+          if (!isNaN(shares) && shares > 0) {
+            updatedHoldings[symbol] = shares;
+
+            // 更新股票詳細信息
+            updatedStocksMap[symbol] = {
+              name: parts[2] || symbol,
+              category: 'TW Stock',
+              currentPrice: parts[3] ? parseFloat(parts[3]) : 0
+            };
+          }
+        }
+      }
+
+      // 更新狀態
+      setUserHoldings(updatedHoldings);
+      setCurrentAllStocksMap(updatedStocksMap);
+
+      // 顯示通知
+      setNotification({
+        show: true,
+        message: '✅ 股票資料已完全同步！持股卡片、warehouse.md檔案已全部更新',
+        type: 'success'
+      });
+
+      // 5秒後自動隱藏通知
+      setTimeout(() => {
+        setNotification(prev => ({ ...prev, show: false }));
+      }, 5000);
+
+    } catch (error) {
+      console.error('處理warehouse更新失敗:', error);
+      setNotification({
+        show: true,
+        message: '⚠️ warehouse內容更新失敗，但股票資料已更新到卡片',
+        type: 'error'
+      });
+
+      setTimeout(() => {
+        setNotification(prev => ({ ...prev, show: false }));
+      }, 3000);
+    }
   };
 
   // 新增：自動更新股票資料
   const autoUpdateStockData = async () => {
     if (Object.keys(userHoldings).length === 0) {
+      console.log('沒有持股資料，跳過自動更新');
       return;
     }
 
+    console.log('開始自動更新股票資料...');
     setIsAutoUpdating(true);
 
     try {
       // 獲取股票代號
       const symbols = extractSymbolsFromHoldings(userHoldings);
+      console.log('需要更新的股票代號:', symbols);
 
       if (symbols.length > 0) {
         // 爬取股票資訊
+        console.log('正在爬取股票資訊...');
         const stockInfos = await StockCrawlerService.fetchMultipleStocks(symbols);
+        console.log('爬取結果:', stockInfos);
 
-        // 更新股票資料到 currentAllStocksMap
+        // 完全更新股票資料到 currentAllStocksMap（不保留舊資料）
         const updatedStocksMap = { ...currentAllStocksMap };
 
         stockInfos.forEach(stock => {
+          console.log(`🔄 更新 ${stock.symbol} 的最新資料: ${stock.name} - $${stock.currentPrice}`);
           updatedStocksMap[stock.symbol] = {
             name: stock.name,
             category: 'TW Stock', // 預設分類
@@ -209,29 +309,77 @@ const App: React.FC = () => {
 
         setCurrentAllStocksMap(updatedStocksMap);
 
-        // 顯示自動更新成功通知
-        setNotification({
-          show: true,
-          message: `🚀 自動更新完成！已更新 ${stockInfos.length} 檔股票資料`,
-          type: 'success'
-        });
+        // 生成更新後的 warehouse.md 內容
+        console.log('生成更新後的 warehouse.md 內容...');
+        const updatedWarehouseContent = await autoUpdateWarehouseContent(userHoldings);
 
-        // 5秒後自動隱藏通知
+        // 嘗試自動更新 warehouse.md 檔案
+        if (autoUpdateSupported) {
+          console.log('使用自動更新服務更新 warehouse.md...');
+          const updateResult = await WarehouseApiService.performAutoUpdate(updatedWarehouseContent);
+
+          if (updateResult.success) {
+            // 自動更新成功
+            setNotification({
+              show: true,
+              message: `🚀 自動更新完成！已更新 ${stockInfos.length} 檔股票資料並自動更新 warehouse.md`,
+              type: 'success'
+            });
+
+            // 不再自動重新載入頁面，避免無限循環
+            console.log('✅ 自動更新完成，warehouse.md 已更新');
+          } else {
+            // 自動更新失敗，回退到手動方式
+            console.warn('自動更新失敗，回退到手動方式:', updateResult.message);
+            setWarehouseManager({
+              show: true,
+              content: updatedWarehouseContent
+            });
+
+            setNotification({
+              show: true,
+              message: `⚠️ ${updateResult.message}，請手動更新 warehouse.md`,
+              type: 'error'
+            });
+          }
+        } else {
+          // 使用手動方式
+          setWarehouseManager({
+            show: true,
+            content: updatedWarehouseContent
+          });
+
+          setNotification({
+            show: true,
+            message: `🚀 自動更新完成！已更新 ${stockInfos.length} 檔股票資料，請手動更新 warehouse.md 檔案`,
+            type: 'success'
+          });
+        }
+
+        // 10秒後自動隱藏通知
         setTimeout(() => {
           setNotification(prev => ({ ...prev, show: false }));
-        }, 5000);
+        }, 10000);
       }
     } catch (error) {
       console.error('自動更新股票資料失敗:', error);
+
+      // 提供更詳細的錯誤信息
+      let errorMessage = '自動更新失敗，請稍後手動更新';
+      if (error instanceof Error) {
+        errorMessage = `自動更新失敗: ${error.message}`;
+        console.error('詳細錯誤:', error.stack);
+      }
+
       setNotification({
         show: true,
-        message: '自動更新失敗，請稍後手動更新',
+        message: errorMessage,
         type: 'error'
       });
 
       setTimeout(() => {
         setNotification(prev => ({ ...prev, show: false }));
-      }, 3000);
+      }, 5000); // 延長顯示時間以便用戶看到詳細錯誤
     } finally {
       setIsAutoUpdating(false);
     }
@@ -348,6 +496,13 @@ const App: React.FC = () => {
         message={notification.message}
         type={notification.type}
         onClose={handleCloseNotification}
+      />
+
+      {/* 新增：warehouse 文件管理器 */}
+      <WarehouseFileManager
+        show={warehouseManager.show}
+        warehouseContent={warehouseManager.content}
+        onClose={() => setWarehouseManager({ show: false, content: '' })}
       />
     </div>
   );
