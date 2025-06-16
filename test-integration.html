@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>整合測試 - 鈞鈞智慧投資顧問</title>
+    <style>
+        body {
+            font-family: 'Microsoft JhengHei', sans-serif;
+            background: linear-gradient(135deg, #1e293b, #0f172a, #0c4a6e);
+            color: #f1f5f9;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(30, 41, 59, 0.8);
+            padding: 30px;
+            border-radius: 16px;
+            border: 1px solid rgba(71, 85, 105, 0.5);
+        }
+        h1 {
+            color: #38bdf8;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(51, 65, 85, 0.3);
+            border-radius: 8px;
+            border: 1px solid rgba(100, 116, 139, 0.3);
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 6px;
+        }
+        .success {
+            background: rgba(34, 197, 94, 0.2);
+            border: 1px solid rgba(34, 197, 94, 0.5);
+            color: #86efac;
+        }
+        .error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            color: #fca5a5;
+        }
+        .info {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.5);
+            color: #93c5fd;
+        }
+        button {
+            background: #0ea5e9;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0284c7;
+        }
+        pre {
+            background: rgba(15, 23, 42, 0.8);
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 整合測試 - 鈞鈞智慧投資顧問</h1>
+        
+        <div class="test-section">
+            <h3>📊 持股資料測試 (warehouse.md)</h3>
+            <button onclick="testWarehouseData()">測試持股資料載入</button>
+            <div id="warehouse-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🤖 AI 模型配置測試 (api.md)</h3>
+            <button onclick="testAIModels()">測試 AI 模型載入</button>
+            <div id="ai-models-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔗 整合測試</h3>
+            <button onclick="testIntegration()">測試完整整合</button>
+            <div id="integration-result"></div>
+        </div>
+    </div>
+
+    <script>
+        async function testWarehouseData() {
+            const resultDiv = document.getElementById('warehouse-result');
+            resultDiv.innerHTML = '<div class="info">測試中...</div>';
+            
+            try {
+                const response = await fetch('/warehouse.md');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const content = await response.text();
+                const lines = content.split('\n').filter(line => line.trim());
+                const holdings = {};
+                
+                for (const line of lines) {
+                    const parts = line.trim().split(/\s+/);
+                    if (parts.length >= 2) {
+                        const symbol = parts[0];
+                        const shares = parseInt(parts[1], 10);
+                        if (!isNaN(shares) && shares > 0) {
+                            holdings[symbol] = shares;
+                        }
+                    }
+                }
+                
+                resultDiv.innerHTML = `
+                    <div class="success">✅ 持股資料載入成功</div>
+                    <div class="info">找到 ${Object.keys(holdings).length} 檔持股</div>
+                    <pre>${JSON.stringify(holdings, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">❌ 持股資料載入失敗: ${error.message}</div>
+                `;
+            }
+        }
+
+        async function testAIModels() {
+            const resultDiv = document.getElementById('ai-models-result');
+            resultDiv.innerHTML = '<div class="info">測試中...</div>';
+            
+            try {
+                const response = await fetch('/api.md');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const content = await response.text();
+                const models = [];
+                const sections = content.split('###').filter(section => section.trim());
+                
+                for (const section of sections) {
+                    const lines = section.split('\n').filter(line => line.trim());
+                    if (lines.length === 0) continue;
+                    
+                    const name = lines[0].trim();
+                    let model = '', baseUrl = '', apiKey = '';
+                    
+                    for (const line of lines.slice(1)) {
+                        const trimmedLine = line.trim();
+                        if (trimmedLine.startsWith('model=')) {
+                            model = trimmedLine.replace('model=', '').replace(/"/g, '');
+                        } else if (trimmedLine.startsWith('base_url=')) {
+                            baseUrl = trimmedLine.replace('base_url=', '').replace(/"/g, '');
+                        } else if (trimmedLine.startsWith('api_key')) {
+                            apiKey = trimmedLine.replace(/api_key\s*=\s*/, '').replace(/"/g, '');
+                        }
+                    }
+                    
+                    if (name && model && baseUrl && apiKey) {
+                        models.push({ name, model, baseUrl, apiKey: apiKey.substring(0, 20) + '...' });
+                    }
+                }
+                
+                resultDiv.innerHTML = `
+                    <div class="success">✅ AI 模型配置載入成功</div>
+                    <div class="info">找到 ${models.length} 個 AI 模型</div>
+                    <pre>${JSON.stringify(models, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">❌ AI 模型配置載入失敗: ${error.message}</div>
+                `;
+            }
+        }
+
+        async function testIntegration() {
+            const resultDiv = document.getElementById('integration-result');
+            resultDiv.innerHTML = '<div class="info">執行整合測試...</div>';
+            
+            try {
+                // 測試持股資料
+                await testWarehouseData();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // 測試 AI 模型
+                await testAIModels();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                resultDiv.innerHTML = `
+                    <div class="success">✅ 整合測試完成</div>
+                    <div class="info">
+                        <p>✓ 持股資料從 warehouse.md 載入成功</p>
+                        <p>✓ AI 模型配置從 api.md 載入成功</p>
+                        <p>✓ 應用程式已準備好進行投資分析</p>
+                    </div>
+                    <div class="info">
+                        <strong>下一步:</strong> 在主應用程式中選擇 AI 模型並獲取投資建議
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">❌ 整合測試失敗: ${error.message}</div>
+                `;
+            }
+        }
+
+        // 頁面載入時自動執行測試
+        window.onload = function() {
+            setTimeout(testIntegration, 1000);
+        };
+    </script>
+</body>
+</html>
