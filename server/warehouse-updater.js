@@ -10,8 +10,9 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
-// warehouse.md 檔案路徑
+// 檔案路徑
 const WAREHOUSE_PATH = path.join(__dirname, '../warehouse.md');
+const ADVICE_PATH = path.join(__dirname, '../advice.md');
 
 /**
  * 讀取 warehouse.md 檔案
@@ -79,6 +80,65 @@ app.get('/api/warehouse/backups', async (req, res) => {
     res.json({ success: true, backups });
   } catch (error) {
     console.error('獲取備份列表失敗:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 讀取 advice.md 檔案
+ */
+app.get('/api/advice', async (req, res) => {
+  try {
+    const content = await fs.readFile(ADVICE_PATH, 'utf8');
+    res.json({ success: true, content });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      // 檔案不存在，返回空內容
+      res.json({ success: true, content: '' });
+    } else {
+      console.error('讀取 advice.md 失敗:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+});
+
+/**
+ * 更新 advice.md 檔案
+ */
+app.post('/api/advice/update', async (req, res) => {
+  try {
+    const { content } = req.body;
+
+    if (content === undefined) {
+      return res.status(400).json({ success: false, error: '缺少檔案內容' });
+    }
+
+    // 備份原檔案（如果存在）
+    let backupPath = null;
+    try {
+      const originalContent = await fs.readFile(ADVICE_PATH, 'utf8');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      backupPath = path.join(__dirname, `../advice.backup.${timestamp}.md`);
+      await fs.writeFile(backupPath, originalContent);
+      console.log(`已備份原 advice.md 到: ${backupPath}`);
+    } catch (backupError) {
+      if (backupError.code !== 'ENOENT') {
+        console.warn('備份 advice.md 失敗，但繼續更新:', backupError.message);
+      }
+    }
+
+    // 寫入新內容
+    await fs.writeFile(ADVICE_PATH, content, 'utf8');
+
+    console.log('advice.md 已成功更新');
+    res.json({
+      success: true,
+      message: 'advice.md 已成功更新',
+      backupPath: backupPath
+    });
+
+  } catch (error) {
+    console.error('更新 advice.md 失敗:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

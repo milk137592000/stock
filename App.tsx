@@ -8,6 +8,7 @@ import { AIModelSelector } from './components/AIModelSelector';
 import { StockDataUpdater } from './components/StockDataUpdater';
 import { UpdateNotification } from './components/UpdateNotification';
 import { WarehouseFileManager } from './components/WarehouseFileManager';
+import { SchedulerManager } from './components/SchedulerManager';
 import { getInvestmentAdvice } from './services/investmentAdvisorService';
 import { loadHoldingsFromWarehouse, loadDetailedHoldingsFromWarehouse, loadAIModelsFromConfig, AIModelConfig } from './services/dataService';
 import { StockCrawlerService, extractSymbolsFromHoldings, autoUpdateWarehouseContent } from './services/stockCrawlerService';
@@ -151,37 +152,167 @@ const App: React.FC = () => {
     }
   }, [isLoadingData, userHoldings]);
 
-  const handleHoldingSharesChange = (symbol: StockSymbol, shares: number) => {
-    setUserHoldings(prev => ({ ...prev, [symbol]: Math.max(0, shares) }));
+  const handleHoldingSharesChange = async (symbol: StockSymbol, shares: number) => {
+    // 更新本地狀態
+    const updatedHoldings = { ...userHoldings, [symbol]: Math.max(0, shares) };
+    setUserHoldings(updatedHoldings);
+
+    // 自動更新 warehouse.md 文件
+    try {
+      console.log(`📊 修改股票 ${symbol} 股數為 ${shares}，自動更新 warehouse.md...`);
+
+      // 生成更新後的 warehouse.md 內容
+      const updatedWarehouseContent = await autoUpdateWarehouseContent(updatedHoldings);
+
+      // 如果自動更新服務可用，直接更新文件
+      if (autoUpdateSupported) {
+        const updateResult = await WarehouseApiService.performAutoUpdate(updatedWarehouseContent);
+
+        if (updateResult.success) {
+          // 不顯示通知，避免過於頻繁
+          console.log(`✅ 已更新股票 ${symbol} 股數並自動更新 warehouse.md`);
+        } else {
+          console.warn(`⚠️ 股票股數已更新，但 warehouse.md 更新失敗: ${updateResult.message}`);
+        }
+      }
+
+    } catch (error) {
+      console.error('修改股數時更新 warehouse.md 失敗:', error);
+    }
   };
 
-  const handleAddStockToHoldings = (symbol: StockSymbol, shares: number) => {
+  const handleAddStockToHoldings = async (symbol: StockSymbol, shares: number) => {
     const trimmedSymbol = symbol.trim().toUpperCase();
-    if (!trimmedSymbol) return; 
+    if (!trimmedSymbol) return;
 
-    setUserHoldings(prev => ({ 
-      ...prev, 
-      [trimmedSymbol]: (prev[trimmedSymbol] || 0) + Math.max(0, shares) 
-    }));
+    // 更新本地狀態
+    const updatedHoldings = {
+      ...userHoldings,
+      [trimmedSymbol]: (userHoldings[trimmedSymbol] || 0) + Math.max(0, shares)
+    };
 
+    setUserHoldings(updatedHoldings);
+
+    // 如果是新股票，添加到股票映射中
+    let updatedStocksMap = { ...currentAllStocksMap };
     if (!currentAllStocksMap[trimmedSymbol] && !INITIAL_ALL_STOCKS_MAP[trimmedSymbol]) {
-      setCurrentAllStocksMap(prevMap => ({
-        ...prevMap,
+      updatedStocksMap = {
+        ...updatedStocksMap,
         [trimmedSymbol]: {
           name: `自訂 (${trimmedSymbol})`,
           category: '未知分類',
           currentPrice: 0,
         }
-      }));
+      };
+      setCurrentAllStocksMap(updatedStocksMap);
+    }
+
+    // 自動更新 warehouse.md 文件
+    try {
+      console.log(`📝 新增股票 ${trimmedSymbol}，自動更新 warehouse.md...`);
+
+      // 生成更新後的 warehouse.md 內容
+      const updatedWarehouseContent = await autoUpdateWarehouseContent(updatedHoldings);
+
+      // 如果自動更新服務可用，直接更新文件
+      if (autoUpdateSupported) {
+        const updateResult = await WarehouseApiService.performAutoUpdate(updatedWarehouseContent);
+
+        if (updateResult.success) {
+          setNotification({
+            show: true,
+            message: `✅ 已新增股票 ${trimmedSymbol} (${shares}股) 並自動更新 warehouse.md`,
+            type: 'success'
+          });
+        } else {
+          setNotification({
+            show: true,
+            message: `⚠️ 股票已新增到卡片，但 warehouse.md 更新失敗: ${updateResult.message}`,
+            type: 'error'
+          });
+        }
+      } else {
+        setNotification({
+          show: true,
+          message: `✅ 已新增股票 ${trimmedSymbol} (${shares}股)，但自動更新服務未運行`,
+          type: 'info'
+        });
+      }
+
+      // 3秒後自動隱藏通知
+      setTimeout(() => {
+        setNotification(prev => ({ ...prev, show: false }));
+      }, 3000);
+
+    } catch (error) {
+      console.error('新增股票時更新 warehouse.md 失敗:', error);
+      setNotification({
+        show: true,
+        message: `✅ 股票已新增到卡片，但 warehouse.md 更新失敗`,
+        type: 'error'
+      });
+
+      setTimeout(() => {
+        setNotification(prev => ({ ...prev, show: false }));
+      }, 3000);
     }
   };
   
-  const handleRemoveStockFromHoldings = (symbol: StockSymbol) => {
-    setUserHoldings(prev => {
-      const newHoldings = { ...prev };
-      delete newHoldings[symbol];
-      return newHoldings;
-    });
+  const handleRemoveStockFromHoldings = async (symbol: StockSymbol) => {
+    // 更新本地狀態
+    const updatedHoldings = { ...userHoldings };
+    delete updatedHoldings[symbol];
+    setUserHoldings(updatedHoldings);
+
+    // 自動更新 warehouse.md 文件
+    try {
+      console.log(`🗑️ 移除股票 ${symbol}，自動更新 warehouse.md...`);
+
+      // 生成更新後的 warehouse.md 內容
+      const updatedWarehouseContent = await autoUpdateWarehouseContent(updatedHoldings);
+
+      // 如果自動更新服務可用，直接更新文件
+      if (autoUpdateSupported) {
+        const updateResult = await WarehouseApiService.performAutoUpdate(updatedWarehouseContent);
+
+        if (updateResult.success) {
+          setNotification({
+            show: true,
+            message: `✅ 已移除股票 ${symbol} 並自動更新 warehouse.md`,
+            type: 'success'
+          });
+        } else {
+          setNotification({
+            show: true,
+            message: `⚠️ 股票已從卡片移除，但 warehouse.md 更新失敗: ${updateResult.message}`,
+            type: 'error'
+          });
+        }
+      } else {
+        setNotification({
+          show: true,
+          message: `✅ 已移除股票 ${symbol}，但自動更新服務未運行`,
+          type: 'info'
+        });
+      }
+
+      // 3秒後自動隱藏通知
+      setTimeout(() => {
+        setNotification(prev => ({ ...prev, show: false }));
+      }, 3000);
+
+    } catch (error) {
+      console.error('移除股票時更新 warehouse.md 失敗:', error);
+      setNotification({
+        show: true,
+        message: `✅ 股票已從卡片移除，但 warehouse.md 更新失敗`,
+        type: 'error'
+      });
+
+      setTimeout(() => {
+        setNotification(prev => ({ ...prev, show: false }));
+      }, 3000);
+    }
   };
 
   // 新增：處理股票資料更新
@@ -463,6 +594,9 @@ const App: React.FC = () => {
           onWarehouseUpdated={handleWarehouseUpdated}
           isAutoUpdating={isAutoUpdating}
         />
+
+        {/* 新增：AI建議自動排程管理器 */}
+        <SchedulerManager />
 
         <InvestmentControls
           monthlyInvestment={userMaxMonthlyInvestment}
