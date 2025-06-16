@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票爬蟲測試</title>
+    <style>
+        body {
+            font-family: 'Microsoft JhengHei', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1e293b;
+            color: #e2e8f0;
+        }
+        .container {
+            background: #334155;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #38bdf8;
+            text-align: center;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #475569;
+            border-radius: 8px;
+        }
+        button {
+            background: #0ea5e9;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0284c7;
+        }
+        button:disabled {
+            background: #64748b;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+        .success {
+            background: #166534;
+            border: 1px solid #22c55e;
+        }
+        .error {
+            background: #991b1b;
+            border: 1px solid #ef4444;
+        }
+        .info {
+            background: #1e40af;
+            border: 1px solid #3b82f6;
+        }
+        .stock-card {
+            background: #64748b;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .stock-info {
+            flex: 1;
+        }
+        .stock-price {
+            text-align: right;
+            font-weight: bold;
+        }
+        .positive { color: #22c55e; }
+        .negative { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🕷️ 股票爬蟲功能測試</h1>
+        
+        <div class="test-section">
+            <h3>📊 單一股票測試</h3>
+            <input type="text" id="singleSymbol" placeholder="輸入股票代號 (例如: 006208)" 
+                   style="padding: 8px; margin-right: 10px; border-radius: 4px; border: 1px solid #64748b; background: #475569; color: #e2e8f0;">
+            <button onclick="testSingleStock()">測試單一股票</button>
+            <div id="single-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📈 批量股票測試</h3>
+            <p>測試warehouse.md中的所有股票</p>
+            <button onclick="testMultipleStocks()">測試所有持股</button>
+            <div id="multiple-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔧 模擬資料測試</h3>
+            <button onclick="testMockData()">測試模擬資料生成</button>
+            <div id="mock-result"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        // 模擬股票爬蟲服務
+        class TestStockCrawler {
+            static async fetchStockInfo(symbol) {
+                try {
+                    // 修正後的Yahoo股市資料 (基於實際查證 2025/06/16)
+                    const stockDatabase = {
+                        '006208': { name: '富邦台50', basePrice: 110.25 },
+                        '00713': { name: '元大台灣高息低波', basePrice: 51.90 },
+                        '00733': { name: '富邦臺灣中小', basePrice: 32.80 },
+                        '00858': { name: '永豐美國500大', basePrice: 29.30 }, // ✅ 修正
+                        '00878': { name: '國泰永續高股息', basePrice: 20.86 },
+                        '00900': { name: '富邦特選高股息30', basePrice: 16.85 },
+                        '00910': { name: '第一金太空衛星', basePrice: 28.46 }, // ✅ 修正
+                        '00916': { name: '國泰全球品牌50', basePrice: 22.81 }, // ✅ 修正
+                        '00919': { name: '群益台灣精選高息', basePrice: 22.49 },
+                        '00933B': { name: '國泰10Y+金融債', basePrice: 14.91 }, // ✅ 修正
+                        '00942B': { name: '台新美A公司債20+', basePrice: 13.29 }, // ✅ 修正
+                        '00947': { name: '台新臺灣IC設計', basePrice: 13.22 } // ✅ 修正
+                    };
+
+                    const stockInfo = stockDatabase[symbol];
+                    if (!stockInfo) {
+                        throw new Error(`找不到股票 ${symbol} 的資料`);
+                    }
+
+                    // 模擬價格波動
+                    const changePercent = (Math.random() - 0.5) * 4; // -2% 到 +2%
+                    const change = (stockInfo.basePrice * changePercent) / 100;
+                    const currentPrice = stockInfo.basePrice + change;
+
+                    return {
+                        symbol,
+                        name: stockInfo.name,
+                        currentPrice: Math.round(currentPrice * 100) / 100,
+                        change: Math.round(change * 100) / 100,
+                        changePercent: Math.round(changePercent * 100) / 100,
+                        lastUpdated: new Date().toISOString()
+                    };
+                } catch (error) {
+                    console.error(`爬取股票 ${symbol} 失敗:`, error);
+                    return null;
+                }
+            }
+
+            static async fetchMultipleStocks(symbols) {
+                const results = [];
+                for (const symbol of symbols) {
+                    const stockInfo = await this.fetchStockInfo(symbol);
+                    if (stockInfo) {
+                        results.push(stockInfo);
+                    }
+                }
+                return results;
+            }
+        }
+
+        // 測試函數
+        window.testSingleStock = async function() {
+            const symbol = document.getElementById('singleSymbol').value.trim();
+            const resultDiv = document.getElementById('single-result');
+            
+            if (!symbol) {
+                resultDiv.innerHTML = '<div class="error">請輸入股票代號</div>';
+                return;
+            }
+
+            resultDiv.innerHTML = '<div class="info">爬取中...</div>';
+
+            try {
+                const stockInfo = await TestStockCrawler.fetchStockInfo(symbol);
+                
+                if (stockInfo) {
+                    const changeClass = stockInfo.change >= 0 ? 'positive' : 'negative';
+                    const changeSign = stockInfo.change >= 0 ? '+' : '';
+                    
+                    resultDiv.innerHTML = `
+                        <div class="success">✅ 爬取成功</div>
+                        <div class="stock-card">
+                            <div class="stock-info">
+                                <strong>${stockInfo.name} (${stockInfo.symbol})</strong><br>
+                                <small>更新時間: ${new Date(stockInfo.lastUpdated).toLocaleString('zh-TW')}</small>
+                            </div>
+                            <div class="stock-price">
+                                <div>$${stockInfo.currentPrice}</div>
+                                <div class="${changeClass}">
+                                    ${changeSign}${stockInfo.change} (${changeSign}${stockInfo.changePercent}%)
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ 爬取失敗</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 錯誤: ${error.message}</div>`;
+            }
+        };
+
+        window.testMultipleStocks = async function() {
+            const resultDiv = document.getElementById('multiple-result');
+            resultDiv.innerHTML = '<div class="info">爬取多檔股票中...</div>';
+
+            // 模擬warehouse.md中的股票
+            const symbols = ['006208', '00713', '00733', '00858', '00878', '00900', '00910', '00916', '00919', '00933B', '00942B', '00947'];
+
+            try {
+                const stockInfos = await TestStockCrawler.fetchMultipleStocks(symbols);
+                
+                let html = `<div class="success">✅ 成功爬取 ${stockInfos.length} 檔股票</div>`;
+                
+                stockInfos.forEach(stock => {
+                    const changeClass = stock.change >= 0 ? 'positive' : 'negative';
+                    const changeSign = stock.change >= 0 ? '+' : '';
+                    
+                    html += `
+                        <div class="stock-card">
+                            <div class="stock-info">
+                                <strong>${stock.name} (${stock.symbol})</strong>
+                            </div>
+                            <div class="stock-price">
+                                <div>$${stock.currentPrice}</div>
+                                <div class="${changeClass}">
+                                    ${changeSign}${stock.change} (${changeSign}${stock.changePercent}%)
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 錯誤: ${error.message}</div>`;
+            }
+        };
+
+        window.testMockData = function() {
+            const resultDiv = document.getElementById('mock-result');
+            
+            try {
+                const testSymbols = ['006208', '00878', '00919', 'TEST123'];
+                let html = '<div class="success">✅ 模擬資料生成測試</div>';
+                
+                testSymbols.forEach(symbol => {
+                    // 模擬生成資料
+                    const basePrice = Math.random() * 100 + 20;
+                    const changePercent = (Math.random() - 0.5) * 6;
+                    const change = (basePrice * changePercent) / 100;
+                    const currentPrice = basePrice + change;
+                    
+                    const changeClass = change >= 0 ? 'positive' : 'negative';
+                    const changeSign = change >= 0 ? '+' : '';
+                    
+                    html += `
+                        <div class="stock-card">
+                            <div class="stock-info">
+                                <strong>模擬股票 ${symbol}</strong>
+                            </div>
+                            <div class="stock-price">
+                                <div>$${currentPrice.toFixed(2)}</div>
+                                <div class="${changeClass}">
+                                    ${changeSign}${change.toFixed(2)} (${changeSign}${changePercent.toFixed(2)}%)
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 錯誤: ${error.message}</div>`;
+            }
+        };
+    </script>
+</body>
+</html>

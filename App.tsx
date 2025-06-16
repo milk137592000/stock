@@ -5,10 +5,13 @@ import { RecommendationDisplay } from './components/RecommendationDisplay';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { ErrorMessage } from './components/ErrorMessage';
 import { AIModelSelector } from './components/AIModelSelector';
+import { StockDataUpdater } from './components/StockDataUpdater';
+import { UpdateNotification } from './components/UpdateNotification';
 import { getInvestmentAdvice } from './services/investmentAdvisorService';
 import { loadHoldingsFromWarehouse, loadAIModelsFromConfig, AIModelConfig } from './services/dataService';
+import { StockCrawlerService, extractSymbolsFromHoldings } from './services/stockCrawlerService';
 import { createAIService } from './services/aiService';
-import { InvestmentAdvice, StockSymbol, UserHoldings, StockDetails } from './types';
+import { InvestmentAdvice, StockSymbol, UserHoldings, StockDetails, StockRealTimeInfo } from './types';
 import {
   DEFAULT_INVESTMENT_AMOUNT,
   MIN_INVESTMENT_AMOUNT,
@@ -35,6 +38,16 @@ const App: React.FC = () => {
   const [availableModels, setAvailableModels] = useState<AIModelConfig[]>([]);
   const [selectedModel, setSelectedModel] = useState<AIModelConfig | null>(null);
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
+
+  // 新增：通知狀態
+  const [notification, setNotification] = useState<{
+    show: boolean;
+    message: string;
+    type: 'success' | 'error' | 'info';
+  }>({ show: false, message: '', type: 'info' });
+
+  // 新增：自動更新狀態
+  const [isAutoUpdating, setIsAutoUpdating] = useState<boolean>(false);
 
   // 初始化資料載入
   useEffect(() => {
@@ -73,6 +86,18 @@ const App: React.FC = () => {
     initializeData();
   }, []);
 
+  // 自動更新股票資料 - 在持股資料載入完成後執行
+  useEffect(() => {
+    if (!isLoadingData && Object.keys(userHoldings).length > 0 && !isAutoUpdating) {
+      // 延遲1.5秒後自動更新，讓用戶看到載入完成
+      const timer = setTimeout(() => {
+        autoUpdateStockData();
+      }, 1500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isLoadingData, userHoldings]);
+
   const handleHoldingSharesChange = (symbol: StockSymbol, shares: number) => {
     setUserHoldings(prev => ({ ...prev, [symbol]: Math.max(0, shares) }));
   };
@@ -104,6 +129,112 @@ const App: React.FC = () => {
       delete newHoldings[symbol];
       return newHoldings;
     });
+  };
+
+  // 新增：處理股票資料更新
+  const handleStockDataUpdated = (updatedData: StockRealTimeInfo[]) => {
+    // 更新股票資料到 currentAllStocksMap
+    const updatedStocksMap = { ...currentAllStocksMap };
+
+    updatedData.forEach(stock => {
+      updatedStocksMap[stock.symbol] = {
+        name: stock.name,
+        category: 'TW Stock', // 預設分類
+        currentPrice: stock.currentPrice
+      };
+    });
+
+    setCurrentAllStocksMap(updatedStocksMap);
+
+    // 顯示成功通知
+    setNotification({
+      show: true,
+      message: `成功更新 ${updatedData.length} 檔股票資料`,
+      type: 'success'
+    });
+
+    // 3秒後自動隱藏通知
+    setTimeout(() => {
+      setNotification(prev => ({ ...prev, show: false }));
+    }, 3000);
+  };
+
+  // 新增：關閉通知
+  const handleCloseNotification = () => {
+    setNotification(prev => ({ ...prev, show: false }));
+  };
+
+  // 新增：處理warehouse內容更新
+  const handleWarehouseUpdated = (newContent: string) => {
+    // 這裡可以選擇是否要立即更新持股資料
+    // 目前先顯示通知，讓用戶知道資料已更新
+    setNotification({
+      show: true,
+      message: '股票資料已更新到持股卡片，warehouse.md檔案已下載',
+      type: 'info'
+    });
+
+    // 3秒後自動隱藏通知
+    setTimeout(() => {
+      setNotification(prev => ({ ...prev, show: false }));
+    }, 5000);
+  };
+
+  // 新增：自動更新股票資料
+  const autoUpdateStockData = async () => {
+    if (Object.keys(userHoldings).length === 0) {
+      return;
+    }
+
+    setIsAutoUpdating(true);
+
+    try {
+      // 獲取股票代號
+      const symbols = extractSymbolsFromHoldings(userHoldings);
+
+      if (symbols.length > 0) {
+        // 爬取股票資訊
+        const stockInfos = await StockCrawlerService.fetchMultipleStocks(symbols);
+
+        // 更新股票資料到 currentAllStocksMap
+        const updatedStocksMap = { ...currentAllStocksMap };
+
+        stockInfos.forEach(stock => {
+          updatedStocksMap[stock.symbol] = {
+            name: stock.name,
+            category: 'TW Stock', // 預設分類
+            currentPrice: stock.currentPrice
+          };
+        });
+
+        setCurrentAllStocksMap(updatedStocksMap);
+
+        // 顯示自動更新成功通知
+        setNotification({
+          show: true,
+          message: `🚀 自動更新完成！已更新 ${stockInfos.length} 檔股票資料`,
+          type: 'success'
+        });
+
+        // 5秒後自動隱藏通知
+        setTimeout(() => {
+          setNotification(prev => ({ ...prev, show: false }));
+        }, 5000);
+      }
+    } catch (error) {
+      console.error('自動更新股票資料失敗:', error);
+      setNotification({
+        show: true,
+        message: '自動更新失敗，請稍後手動更新',
+        type: 'error'
+      });
+
+      setTimeout(() => {
+        setNotification(prev => ({ ...prev, show: false }));
+      }, 3000);
+    } finally {
+      setIsAutoUpdating(false);
+    }
   };
 
   const handleGetAdvice = useCallback(async () => {
@@ -159,6 +290,7 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-sky-900 text-slate-100 flex flex-col items-center justify-center p-4">
         <LoadingSpinner />
         <p className="mt-4 text-slate-300">載入資料中...</p>
+        <p className="mt-2 text-slate-400 text-sm">載入完成後將自動更新股票資料</p>
       </div>
     );
   }
@@ -174,6 +306,14 @@ const App: React.FC = () => {
           selectedModel={selectedModel}
           onModelSelect={setSelectedModel}
           isLoading={isLoading}
+        />
+
+        {/* 新增：股票資料更新器 */}
+        <StockDataUpdater
+          userHoldings={userHoldings}
+          onDataUpdated={handleStockDataUpdated}
+          onWarehouseUpdated={handleWarehouseUpdated}
+          isAutoUpdating={isAutoUpdating}
         />
 
         <InvestmentControls
@@ -201,6 +341,14 @@ const App: React.FC = () => {
         )}
       </main>
       <Footer />
+
+      {/* 新增：更新通知 */}
+      <UpdateNotification
+        show={notification.show}
+        message={notification.message}
+        type={notification.type}
+        onClose={handleCloseNotification}
+      />
     </div>
   );
 };

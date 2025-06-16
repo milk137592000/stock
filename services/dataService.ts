@@ -1,4 +1,4 @@
-import { UserHoldings, StockSymbol } from '../types';
+import { UserHoldings, StockSymbol, HoldingDetails } from '../types';
 
 export interface AIModelConfig {
   name: string;
@@ -16,30 +16,88 @@ export const loadHoldingsFromWarehouse = async (): Promise<UserHoldings> => {
     if (!response.ok) {
       throw new Error(`無法讀取 warehouse.md: ${response.status}`);
     }
-    
+
     const content = await response.text();
     const holdings: UserHoldings = {};
-    
+
     // 解析每一行的持股資料
     const lines = content.split('\n').filter(line => line.trim());
-    
+
     for (const line of lines) {
       const parts = line.trim().split(/\s+/);
       if (parts.length >= 2) {
         const symbol = parts[0] as StockSymbol;
         const shares = parseInt(parts[1], 10);
-        
+
         if (!isNaN(shares) && shares > 0) {
           holdings[symbol] = shares;
         }
       }
     }
-    
+
     return holdings;
   } catch (error) {
     console.error('讀取持股資料失敗:', error);
     // 返回空的持股資料作為備用
     return {};
+  }
+};
+
+/**
+ * 從 warehouse.md 讀取詳細持股資料（包含股票資訊）
+ */
+export const loadDetailedHoldingsFromWarehouse = async (): Promise<HoldingDetails[]> => {
+  try {
+    const response = await fetch('/warehouse.md');
+    if (!response.ok) {
+      throw new Error(`無法讀取 warehouse.md: ${response.status}`);
+    }
+
+    const content = await response.text();
+    const holdings: HoldingDetails[] = [];
+
+    // 解析每一行的持股資料
+    const lines = content.split('\n').filter(line => line.trim());
+
+    for (const line of lines) {
+      const parts = line.trim().split(/\t/); // 使用tab分隔
+
+      if (parts.length >= 2) {
+        const symbol = parts[0] as StockSymbol;
+        const shares = parseInt(parts[1], 10);
+
+        if (!isNaN(shares) && shares > 0) {
+          const holding: HoldingDetails = {
+            symbol,
+            shares,
+            name: parts[2] || symbol,
+            currentPrice: parts[3] ? parseFloat(parts[3]) : undefined,
+            change: parts[4] ? parseFloat(parts[4]) : undefined,
+            changePercent: parts[5] ? parseFloat(parts[5]) : undefined,
+            lastUpdated: parts[6] || undefined
+          };
+          holdings.push(holding);
+        }
+      } else if (parts.length >= 2) {
+        // 備用解析：使用空格分隔（舊格式）
+        const spaceParts = line.trim().split(/\s+/);
+        const symbol = spaceParts[0] as StockSymbol;
+        const shares = parseInt(spaceParts[1], 10);
+
+        if (!isNaN(shares) && shares > 0) {
+          holdings.push({
+            symbol,
+            shares,
+            name: symbol
+          });
+        }
+      }
+    }
+
+    return holdings;
+  } catch (error) {
+    console.error('讀取詳細持股資料失敗:', error);
+    return [];
   }
 };
 

@@ -7,6 +7,27 @@ export interface StockDetails {
   currentPrice: number; // Added current price
 }
 
+// 新增：股票即時資訊介面
+export interface StockRealTimeInfo {
+  symbol: StockSymbol;
+  name: string;
+  currentPrice: number;
+  change: number; // 今日波動金額
+  changePercent: number; // 今日波動百分比
+  lastUpdated: string; // 最後更新時間
+}
+
+// 新增：持股詳細資訊介面
+export interface HoldingDetails {
+  symbol: StockSymbol;
+  shares: number;
+  name?: string;
+  currentPrice?: number;
+  change?: number;
+  changePercent?: number;
+  lastUpdated?: string;
+}
+
 export interface RecommendedStock extends StockDetails {
   allocatedAmount: number; // The NTD amount for BUY (cost) or SELL (proceeds). 0 for HOLD.
   recommendedShares: number; // Number of shares to buy/sell. Positive for buy/sell quantity.
