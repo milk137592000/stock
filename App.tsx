@@ -9,6 +9,7 @@ import { StockDataUpdater } from './components/StockDataUpdater';
 import { UpdateNotification } from './components/UpdateNotification';
 import { WarehouseFileManager } from './components/WarehouseFileManager';
 import { SchedulerManager } from './components/SchedulerManager';
+import { GoogleSheetsSync } from './components/GoogleSheetsSync';
 import { getInvestmentAdvice } from './services/investmentAdvisorService';
 import { loadHoldingsFromWarehouse, loadDetailedHoldingsFromWarehouse, loadAIModelsFromConfig, AIModelConfig } from './services/dataService';
 import { StockCrawlerService, extractSymbolsFromHoldings, autoUpdateWarehouseContent } from './services/stockCrawlerService';
@@ -597,6 +598,9 @@ const App: React.FC = () => {
 
         {/* 新增：AI建議自動排程管理器 */}
         <SchedulerManager />
+
+        {/* 新增：Google Docs 同步 */}
+        <GoogleSheetsSync />
 
         <InvestmentControls
           monthlyInvestment={userMaxMonthlyInvestment}

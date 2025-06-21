@@ -62,7 +62,8 @@ export class OpenRouterAIService implements AIService {
               }
             ],
             temperature: 0.7,
-            max_tokens: 4000
+            max_tokens: 8000,  // 增加 token 限制
+            stream: false      // 確保不使用串流模式
           })
         });
 
@@ -80,13 +81,29 @@ export class OpenRouterAIService implements AIService {
             }
           }
 
+          // 處理服務不可用錯誤 (503)
+          if (response.status === 503) {
+            console.warn(`⚠️ ${this.config.name} 服務暫時不可用 (503)，跳過此模型`);
+            throw new Error(`${this.config.name} 服務暫時不可用，請稍後再試`);
+          }
+
           throw new Error(`API 請求失敗: ${response.status} ${response.statusText} - ${errorText}`);
         }
 
         const data = await response.json();
-        const content = data.choices?.[0]?.message?.content;
+        console.log(`🔍 ${this.config.name} API 回應:`, JSON.stringify(data, null, 2));
 
-        if (!content) {
+        // 嘗試從不同字段獲取內容
+        let content = data.choices?.[0]?.message?.content;
+
+        // 如果 content 為空，嘗試從 reasoning 字段獲取（DeepSeek 特有）
+        if (!content && data.choices?.[0]?.message?.reasoning) {
+          content = data.choices?.[0]?.message?.reasoning;
+          console.log(`📝 ${this.config.name} 使用 reasoning 字段作為回應內容`);
+        }
+
+        if (!content || content.trim() === '') {
+          console.error(`❌ ${this.config.name} 回應內容為空:`, data);
           throw new Error('AI 回應內容為空');
         }
 
@@ -94,11 +111,37 @@ export class OpenRouterAIService implements AIService {
         let geminiResponse: GeminiApiResponse;
         try {
           // 移除可能的 markdown 代碼塊標記
-          const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
+          let cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
+
+          // 如果內容不是以 { 開始，嘗試找到第一個 JSON 對象
+          if (!cleanContent.startsWith('{')) {
+            const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              cleanContent = jsonMatch[0];
+            }
+          }
+
+          console.log(`📝 ${this.config.name} 清理後的回應內容:`, cleanContent.substring(0, 500) + '...');
           geminiResponse = JSON.parse(cleanContent);
         } catch (parseError) {
-          console.error('JSON 解析錯誤:', parseError);
-          throw new Error('AI 回應格式無效，無法解析建議');
+          console.error(`❌ ${this.config.name} JSON 解析錯誤:`, parseError);
+          console.error('原始內容:', content);
+
+          // 嘗試創建一個基本的回應結構
+          geminiResponse = {
+            marketOutlook: "AI 回應格式錯誤，無法解析完整建議",
+            managedRecommendations: [],
+            newStockSuggestions: [],
+            budgetSummary: {
+              userProvidedMonthlyCapacityNTD: userMaxMonthlyInvestment,
+              decidedOptimalInvestmentNTD: 0,
+              totalSpentOnBuysNTD: 0,
+              totalGainedFromSellsNTD: 0,
+              netInvestmentNTD: 0,
+              remainingUnallocatedNTD: userMaxMonthlyInvestment
+            }
+          };
+          console.warn(`⚠️ ${this.config.name} 使用備用回應結構`);
         }
 
         console.log(`✅ ${this.config.name} 成功生成建議`);
@@ -155,6 +198,29 @@ export class OpenRouterAIService implements AIService {
       })), null, 2
     );
 
+    // 為 DeepSeek 等模型簡化提示
+    const isDeepSeek = this.config.model.includes('deepseek');
+
+    if (isDeepSeek) {
+      return `你是台灣股市投資顧問。用戶每月投資預算: ${userMaxMonthlyInvestment} NTD
+目前持股: ${userHoldingsForContext}
+
+請用JSON格式回應投資建議:
+{
+  "marketOutlook": "市場分析",
+  "managedRecommendations": [{"symbol": "股票代號", "action": "BUY/SELL/HOLD", "shares": 數量, "reasoning": "理由"}],
+  "newStockSuggestions": [{"symbol": "股票代號", "shares": 數量, "reasoning": "理由"}],
+  "budgetSummary": {
+    "userProvidedMonthlyCapacityNTD": ${userMaxMonthlyInvestment},
+    "decidedOptimalInvestmentNTD": 5000,
+    "totalSpentOnBuysNTD": 0,
+    "totalGainedFromSellsNTD": 0,
+    "netInvestmentNTD": 0,
+    "remainingUnallocatedNTD": ${userMaxMonthlyInvestment}
+  }
+}`;
+    }
+
     return `
 你是一位專業的台灣股市投資分析師。
 你的任務是為採用長期、紀律性、分階段投資策略的用戶提供投資建議。用戶願意每月買賣股票。你的建議必須使用正體中文。
@@ -193,7 +259,7 @@ export class OpenRouterAIService implements AIService {
   ],
   "newStockSuggestions": [
     {
-      "symbol": "新推薦股票代號", 
+      "symbol": "新推薦股票代號",
       "shares": "建議購買股數",
       "reasoning": "推薦理由，正體中文"
     }
@@ -202,7 +268,7 @@ export class OpenRouterAIService implements AIService {
     "userProvidedMonthlyCapacityNTD": ${userMaxMonthlyInvestment},
     "decidedOptimalInvestmentNTD": "AI決定的最佳投資金額",
     "totalSpentOnBuysNTD": "購買總金額",
-    "totalGainedFromSellsNTD": "賣出總金額", 
+    "totalGainedFromSellsNTD": "賣出總金額",
     "netInvestmentNTD": "淨投資金額",
     "remainingUnallocatedNTD": "剩餘未配置金額"
   }
